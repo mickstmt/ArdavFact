@@ -1,0 +1,297 @@
+{% extends 'base.html' %}
+{% block title %}{{ comprobante.numero_completo }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .det-card { background: var(--af-surface); border: 1px solid var(--af-border); border-radius: var(--af-radius); padding: 1.25rem; margin-bottom: 1rem; }
+  .det-label { font-size: 0.72rem; color: var(--af-text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.15rem; }
+  .det-value { font-size: 0.88rem; color: var(--af-text); font-weight: 500; }
+  .items-table { font-size: 0.82rem; }
+  .items-table th { background: var(--af-surface-2); color: var(--af-text-muted); font-weight: 600; border-color: var(--af-border); }
+  .items-table td { border-color: var(--af-border); color: var(--af-text); vertical-align: middle; }
+  .total-section { background: var(--af-surface-2); border-radius: var(--af-radius); padding: 1rem 1.25rem; }
+  .total-row { display: flex; justify-content: space-between; font-size: 0.83rem; color: var(--af-text-muted); padding: 0.2rem 0; }
+  .total-row.grand { font-size: 1.05rem; font-weight: 700; color: var(--af-text); border-top: 1px solid var(--af-border); margin-top: 0.4rem; padding-top: 0.5rem; }
+  .badge-estado { display: inline-block; padding: 0.3rem 0.8rem; border-radius: 20px; font-size: 0.75rem; font-weight: 700; }
+  .estado-PENDIENTE  { background: rgba(255,193,7,0.18); color: #e0a800; }
+  .estado-ENVIADO    { background: rgba(13,202,240,0.15); color: #0aa2c0; }
+  .estado-ACEPTADO   { background: rgba(25,135,84,0.15); color: #2db37a; }
+  .estado-RECHAZADO  { background: rgba(220,53,69,0.15); color: #e05c6d; }
+  .estado-BORRADOR   { background: rgba(108,117,125,0.12); color: #8a9099; }
+  .badge-tipo { display: inline-block; padding: 0.3rem 0.8rem; border-radius: 20px; font-size: 0.75rem; font-weight: 700; }
+  .tipo-FACTURA     { background: rgba(13,110,253,0.15); color: #4d8df7; }
+  .tipo-BOLETA      { background: rgba(108,117,125,0.15); color: #8a9099; }
+  .tipo-NOTA_CREDITO{ background: rgba(255,193,7,0.18); color: #e0a800; }
+  .tipo-NOTA_DEBITO { background: rgba(220,53,69,0.15); color: #e05c6d; }
+  .action-btn { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.35rem 0.75rem; border-radius: 6px; font-size: 0.8rem; font-weight: 500; text-decoration: none; border: 1px solid var(--af-border); background: var(--af-surface-2); color: var(--af-text); transition: all 0.12s; }
+  .action-btn:hover { border-color: var(--af-primary); color: var(--af-primary); background: var(--af-surface); }
+  .action-btn.primary { background: var(--af-primary); border-color: var(--af-primary); color: #fff; }
+  .action-btn.primary:hover { opacity: 0.9; }
+  .action-btn.danger { background: rgba(220,53,69,0.1); border-color: rgba(220,53,69,0.3); color: #e05c6d; }
+  .sunat-msg { font-size: 0.78rem; padding: 0.5rem 0.75rem; border-radius: 6px; margin-top: 0.5rem; }
+  .sunat-ok   { background: rgba(25,135,84,0.1); color: #2db37a; border: 1px solid rgba(25,135,84,0.2); }
+  .sunat-warn { background: rgba(255,193,7,0.1); color: #e0a800; border: 1px solid rgba(255,193,7,0.2); }
+  .sunat-err  { background: rgba(220,53,69,0.1); color: #e05c6d; border: 1px solid rgba(220,53,69,0.2); }
+</style>
+{% endblock %}
+
+{% block content %}
+{# ── Encabezado ── #}
+<div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
+  <a href="{{ url_for('ventas.lista_ventas') }}" style="color:var(--af-text-muted); text-decoration:none;">
+    <i class="bi bi-chevron-left"></i>
+  </a>
+  <h4 class="fw-bold mb-0" style="color:var(--af-text);">{{ comprobante.numero_completo }}</h4>
+  <span class="badge-tipo tipo-{{ comprobante.tipo_comprobante }}">
+    {{ {'FACTURA':'Factura','BOLETA':'Boleta','NOTA_CREDITO':'Nota de Crédito','NOTA_DEBITO':'Nota de Débito'}[comprobante.tipo_comprobante] }}
+  </span>
+  <span class="badge-estado estado-{{ comprobante.estado }}">{{ comprobante.estado }}</span>
+</div>
+
+<div class="row g-3">
+
+  {# ── Columna izquierda ── #}
+  <div class="col-12 col-lg-8">
+
+    {# Info general #}
+    <div class="det-card">
+      <div class="row g-3">
+        <div class="col-6 col-md-3">
+          <div class="det-label">Fecha Emisión</div>
+          <div class="det-value">{{ comprobante.fecha_emision.strftime('%d/%m/%Y %H:%M') }}</div>
+        </div>
+        {% if comprobante.numero_orden %}
+        <div class="col-6 col-md-3">
+          <div class="det-label">N° Orden</div>
+          <div class="det-value">{{ comprobante.numero_orden }}</div>
+        </div>
+        {% endif %}
+        {% if comprobante.fecha_vencimiento %}
+        <div class="col-6 col-md-3">
+          <div class="det-label">Vencimiento</div>
+          <div class="det-value">{{ comprobante.fecha_vencimiento.strftime('%d/%m/%Y') }}</div>
+        </div>
+        {% endif %}
+        {% if comprobante.fecha_envio_sunat %}
+        <div class="col-6 col-md-3">
+          <div class="det-label">Enviado SUNAT</div>
+          <div class="det-value">{{ comprobante.fecha_envio_sunat.strftime('%d/%m/%Y %H:%M') }}</div>
+        </div>
+        {% endif %}
+      </div>
+
+      {# Mensaje SUNAT #}
+      {% if comprobante.mensaje_sunat %}
+      <div class="sunat-msg {% if comprobante.estado == 'ACEPTADO' %}sunat-ok{% elif comprobante.estado == 'RECHAZADO' %}sunat-err{% else %}sunat-warn{% endif %} mt-3">
+        <i class="bi bi-info-circle me-1"></i>
+        {% if comprobante.codigo_sunat %}<strong>[{{ comprobante.codigo_sunat }}]</strong> {% endif %}
+        {{ comprobante.mensaje_sunat }}
+      </div>
+      {% endif %}
+
+      {# Comprobante de referencia (NC/ND) #}
+      {% if comprobante.comprobante_ref %}
+      <div class="mt-3" style="font-size:0.82rem; color:var(--af-text-muted);">
+        <i class="bi bi-link-45deg me-1"></i>Referencia:
+        <a href="{{ url_for('ventas.detalle_venta', comp_id=comprobante.comprobante_ref.id) }}"
+           style="color:var(--af-primary);">
+          {{ comprobante.comprobante_ref.numero_completo }}
+        </a>
+        {% if comprobante.motivo_descripcion %}— {{ comprobante.motivo_descripcion }}{% endif %}
+      </div>
+      {% endif %}
+    </div>
+
+    {# Cliente #}
+    <div class="det-card">
+      <div class="det-label mb-2"><i class="bi bi-person me-1"></i>Cliente</div>
+      <div class="row g-2">
+        <div class="col-12 col-md-6">
+          <div class="det-label">Nombre / Razón Social</div>
+          <div class="det-value fw-semibold">{{ comprobante.cliente.nombre_completo }}</div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="det-label">Tipo Documento</div>
+          <div class="det-value">{{ comprobante.cliente.tipo_documento }}</div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="det-label">Número</div>
+          <div class="det-value">{{ comprobante.cliente.numero_documento }}</div>
+        </div>
+        {% if comprobante.cliente.direccion %}
+        <div class="col-12">
+          <div class="det-label">Dirección</div>
+          <div class="det-value">{{ comprobante.cliente.direccion }}</div>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    {# Ítems #}
+    <div class="det-card" style="padding:0; overflow:hidden;">
+      <div style="padding:0.85rem 1.25rem; border-bottom:1px solid var(--af-border); font-size:0.82rem; font-weight:600; color:var(--af-text);">
+        <i class="bi bi-list-ul me-1"></i>Ítems ({{ comprobante.items|length }})
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="table items-table mb-0">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Producto</th>
+              <th>SKU</th>
+              <th class="text-center">Cant.</th>
+              <th class="text-end">P.Unit. (sin IGV)</th>
+              <th class="text-end">IGV</th>
+              <th class="text-end">Subtotal</th>
+            </tr>
+          </thead>
+          <tbody>
+          {% for item in comprobante.items %}
+            <tr>
+              <td style="color:var(--af-text-muted);">{{ loop.index }}</td>
+              <td>
+                <div style="font-weight:500;">{{ item.producto_nombre }}</div>
+                {% if item.atributos_json %}
+                <div style="font-size:0.72rem; color:var(--af-text-muted);">
+                  {% for k, v in item.atributos_json.items() %}{{ k }}: {{ v }}{% if not loop.last %} · {% endif %}{% endfor %}
+                </div>
+                {% endif %}
+              </td>
+              <td style="color:var(--af-text-muted);">{{ item.producto_sku or '—' }}</td>
+              <td class="text-center">{{ '%.0f'|format(item.cantidad) }}</td>
+              <td class="text-end">S/ {{ '%.2f'|format(item.precio_unitario_sin_igv) }}</td>
+              <td class="text-end" style="color:var(--af-text-muted);">S/ {{ '%.2f'|format(item.igv_unitario) }}</td>
+              <td class="text-end fw-semibold">S/ {{ '%.2f'|format(item.subtotal_con_igv) }}</td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>{# /col-8 #}
+
+  {# ── Columna derecha ── #}
+  <div class="col-12 col-lg-4">
+
+    {# Resumen fiscal #}
+    <div class="det-card">
+      <div class="det-label mb-3"><i class="bi bi-calculator me-1"></i>Resumen Fiscal</div>
+      <div class="total-section">
+        <div class="total-row">
+          <span>Op. Gravadas</span>
+          <span>S/ {{ '%.2f'|format(comprobante.total_operaciones_gravadas) }}</span>
+        </div>
+        <div class="total-row">
+          <span>Op. Exoneradas</span>
+          <span>S/ {{ '%.2f'|format(comprobante.total_operaciones_exoneradas) }}</span>
+        </div>
+        <div class="total-row">
+          <span>Op. Inafectas</span>
+          <span>S/ {{ '%.2f'|format(comprobante.total_operaciones_inafectas) }}</span>
+        </div>
+        <div class="total-row">
+          <span>I.G.V. 18%</span>
+          <span>S/ {{ '%.2f'|format(comprobante.total_igv) }}</span>
+        </div>
+        {% if comprobante.costo_envio and comprobante.costo_envio > 0 %}
+        <div class="total-row">
+          <span>Envío (gravado)</span>
+          <span>S/ {{ '%.2f'|format(comprobante.costo_envio) }}</span>
+        </div>
+        {% endif %}
+        <div class="total-row grand">
+          <span>IMPORTE TOTAL</span>
+          <span>S/ {{ '%.2f'|format(comprobante.total) }}</span>
+        </div>
+      </div>
+    </div>
+
+    {# Acciones #}
+    <div class="det-card">
+      <div class="det-label mb-3"><i class="bi bi-lightning me-1"></i>Acciones</div>
+      <div class="d-flex flex-column gap-2">
+
+        <a href="{{ url_for('comprobantes.descargar_pdf', comp_id=comprobante.id) }}"
+           class="action-btn primary">
+          <i class="bi bi-file-earmark-pdf"></i>Descargar PDF
+        </a>
+
+        {% if xml_existe %}
+        <a href="{{ url_for('comprobantes.descargar_xml', comp_id=comprobante.id) }}"
+           class="action-btn">
+          <i class="bi bi-file-earmark-code"></i>Descargar XML
+        </a>
+        {% else %}
+        <a href="{{ url_for('comprobantes.descargar_xml', comp_id=comprobante.id) }}"
+           class="action-btn" title="Regenerar XML desde BD">
+          <i class="bi bi-file-earmark-code"></i>XML (regenerar)
+        </a>
+        {% endif %}
+
+        {% if cdr_existe %}
+        <a href="{{ url_for('comprobantes.descargar_cdr', comp_id=comprobante.id) }}"
+           class="action-btn">
+          <i class="bi bi-file-earmark-check"></i>Descargar CDR
+        </a>
+        {% endif %}
+
+        {% if comprobante.estado == 'PENDIENTE' %}
+        <button onclick="reenviarSunat({{ comprobante.id }})" class="action-btn" style="cursor:pointer; width:100%;">
+          <i class="bi bi-cloud-upload"></i>Enviar a SUNAT
+        </button>
+        {% endif %}
+
+        {% if comprobante.tipo_comprobante in ('FACTURA','BOLETA') and comprobante.estado in ('ENVIADO','ACEPTADO') %}
+        <hr style="border-color:var(--af-border); margin:0.25rem 0;">
+        <a href="{{ url_for('notas.nueva_nc', comp_ref_id=comprobante.id) }}"
+           class="action-btn">
+          <i class="bi bi-receipt-cutoff"></i>Nota de Crédito
+        </a>
+        <a href="{{ url_for('notas.nueva_nd', comp_ref_id=comprobante.id) }}"
+           class="action-btn">
+          <i class="bi bi-receipt"></i>Nota de Débito
+        </a>
+        {% endif %}
+
+      </div>
+    </div>
+
+    {# Hash / ID externo #}
+    {% if comprobante.hash_cpe or comprobante.external_id %}
+    <div class="det-card" style="font-size:0.75rem; color:var(--af-text-muted);">
+      {% if comprobante.hash_cpe %}
+      <div class="det-label">Hash CPE</div>
+      <div style="word-break:break-all; font-family:monospace; font-size:0.72rem;">{{ comprobante.hash_cpe }}</div>
+      {% endif %}
+      {% if comprobante.external_id %}
+      <div class="det-label mt-2">MiPSE ID</div>
+      <div style="font-family:monospace;">{{ comprobante.external_id }}</div>
+      {% endif %}
+    </div>
+    {% endif %}
+
+  </div>{# /col-4 #}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function reenviarSunat(compId) {
+  const ok = await Swal.fire({
+    title: 'Reenviar a SUNAT',
+    text: 'Se intentará enviar este comprobante nuevamente.',
+    icon: 'question', showCancelButton: true,
+    confirmButtonText: '<i class="bi bi-cloud-upload"></i> Enviar',
+    confirmButtonColor: '#0d6efd',
+    background: 'var(--af-surface)', color: 'var(--af-text)',
+  });
+  if (!ok.isConfirmed) return;
+  try {
+    const res = await afFetch(`/comprobantes/${compId}/reenviar`, { method: 'POST' });
+    showToast(res.success ? 'SUNAT' : 'Error', res.message, res.success ? 'success' : 'danger');
+    if (res.success) setTimeout(() => location.reload(), 1800);
+  } catch(e) { showToast('Error', e.message, 'danger'); }
+}
+</script>
+{% endblock %}

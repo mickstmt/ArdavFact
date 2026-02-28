@@ -1,0 +1,247 @@
+{% extends 'base.html' %}
+{% block title %}Gestión de Usuarios{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+  <div>
+    <h4 class="mb-0 fw-semibold">Gestión de Usuarios</h4>
+    <p class="text-muted mb-0 small">{{ usuarios|length }} usuario(s) registrado(s)</p>
+  </div>
+  <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalNuevoUsuario">
+    <i class="bi bi-person-plus-fill me-1"></i>Nuevo usuario
+  </button>
+</div>
+
+<!-- Tabla de usuarios -->
+<div class="af-card overflow-auto">
+  <table class="table table-sm align-middle mb-0">
+    <thead>
+      <tr>
+        <th>Nombre</th>
+        <th>Email</th>
+        <th>Rol</th>
+        <th>Tipo</th>
+        <th>Estado</th>
+        <th>Último login</th>
+        <th>Acciones</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for u in usuarios %}
+      <tr id="fila-{{ u.id }}" class="{{ 'opacity-50' if not u.activo }}">
+        <td class="fw-semibold">{{ u.nombre }}</td>
+        <td class="small text-muted">{{ u.email }}</td>
+        <td>
+          <select class="form-select form-select-sm py-0" style="min-width:120px;"
+                  onchange="cambiarRol({{ u.id }}, this.value)">
+            <option value="">— Sin rol —</option>
+            {% for rol in roles %}
+              <option value="{{ rol.id }}"
+                      {{ 'selected' if u.roles and u.roles[0].id == rol.id }}>
+                {{ rol.nombre }}
+              </option>
+            {% endfor %}
+          </select>
+        </td>
+        <td>
+          {% if u.es_admin %}
+            <span class="badge bg-danger">Admin</span>
+          {% else %}
+            <span class="badge bg-secondary">Usuario</span>
+          {% endif %}
+        </td>
+        <td>
+          <span id="badge-activo-{{ u.id }}"
+                class="badge {% if u.activo %}bg-success{% else %}bg-secondary{% endif %}">
+            {{ 'Activo' if u.activo else 'Inactivo' }}
+          </span>
+        </td>
+        <td class="small text-muted">
+          {{ u.ultimo_login.strftime('%d/%m/%Y %H:%M') if u.ultimo_login else '—' }}
+        </td>
+        <td>
+          <div class="d-flex gap-1">
+            <!-- Toggle activo -->
+            {% if u.id != current_user.id %}
+            <button class="btn btn-xs btn-outline-{{ 'danger' if u.activo else 'success' }} py-0 px-2"
+                    style="font-size:.75rem;"
+                    onclick="toggleUsuario({{ u.id }}, {{ u.activo|lower }})">
+              <i class="bi bi-{{ 'person-dash' if u.activo else 'person-check' }}"></i>
+              {{ 'Desactivar' if u.activo else 'Activar' }}
+            </button>
+            {% endif %}
+            <!-- Reset password -->
+            <button class="btn btn-xs btn-outline-secondary py-0 px-2"
+                    style="font-size:.75rem;"
+                    onclick="resetPassword({{ u.id }}, '{{ u.nombre|e }}')">
+              <i class="bi bi-key"></i>
+            </button>
+          </div>
+        </td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="7" class="text-center text-muted py-5">Sin usuarios registrados.</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+
+<!-- Modal: Nuevo usuario -->
+<div class="modal fade" id="modalNuevoUsuario" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-person-plus me-2"></i>Nuevo usuario</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label small">Nombre completo <span class="text-danger">*</span></label>
+          <input type="text" id="nuNombre" class="form-control form-control-sm" placeholder="Ej: María García">
+        </div>
+        <div class="mb-3">
+          <label class="form-label small">Email <span class="text-danger">*</span></label>
+          <input type="email" id="nuEmail" class="form-control form-control-sm" placeholder="correo@empresa.com">
+        </div>
+        <div class="mb-3">
+          <label class="form-label small">Contraseña <span class="text-danger">*</span></label>
+          <input type="password" id="nuPassword" class="form-control form-control-sm" placeholder="Mínimo 8 caracteres">
+        </div>
+        <div class="mb-3">
+          <label class="form-label small">Rol</label>
+          <select id="nuRol" class="form-select form-select-sm">
+            <option value="">— Sin rol —</option>
+            {% for rol in roles %}
+              <option value="{{ rol.id }}">{{ rol.nombre }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="nuAdmin">
+          <label class="form-check-label small" for="nuAdmin">Es administrador</label>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary btn-sm" onclick="crearUsuario()">
+          <i class="bi bi-check-lg me-1"></i>Crear usuario
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+
+{% block scripts %}
+<script>
+// ── Crear usuario ───────────────────────────────────────────────────────────
+async function crearUsuario() {
+  const nombre   = document.getElementById('nuNombre').value.trim();
+  const email    = document.getElementById('nuEmail').value.trim();
+  const password = document.getElementById('nuPassword').value.trim();
+  const rol_id   = document.getElementById('nuRol').value || null;
+  const es_admin = document.getElementById('nuAdmin').checked;
+
+  if (!nombre || !email || !password) {
+    showToast('warning', 'Nombre, email y contraseña son obligatorios.');
+    return;
+  }
+
+  const resp = await afFetch('{{ url_for("admin.crear_usuario") }}', {
+    method: 'POST',
+    body: JSON.stringify({ nombre, email, password, rol_id, es_admin }),
+  });
+  const data = await resp.json();
+
+  if (data.success) {
+    showToast('success', data.message);
+    bootstrap.Modal.getInstance(document.getElementById('modalNuevoUsuario')).hide();
+    setTimeout(() => window.location.reload(), 1000);
+  } else {
+    showToast('error', data.message);
+  }
+}
+
+// ── Toggle activo / inactivo ────────────────────────────────────────────────
+async function toggleUsuario(userId, activo) {
+  const accion = activo ? 'desactivar' : 'activar';
+  const ok = await Swal.fire({
+    title: `¿${accion.charAt(0).toUpperCase() + accion.slice(1)} usuario?`,
+    icon: 'question',
+    showCancelButton: true,
+    confirmButtonText: 'Sí',
+    cancelButtonText: 'Cancelar',
+    confirmButtonColor: activo ? '#dc3545' : '#198754',
+  });
+  if (!ok.isConfirmed) return;
+
+  const resp = await afFetch(`/admin/usuarios/${userId}/toggle`, { method: 'POST' });
+  const data = await resp.json();
+
+  if (data.success) {
+    showToast('success', data.message);
+    const badge = document.getElementById(`badge-activo-${userId}`);
+    const fila  = document.getElementById(`fila-${userId}`);
+    if (data.activo) {
+      badge.className = 'badge bg-success';
+      badge.textContent = 'Activo';
+      fila.classList.remove('opacity-50');
+    } else {
+      badge.className = 'badge bg-secondary';
+      badge.textContent = 'Inactivo';
+      fila.classList.add('opacity-50');
+    }
+    // Recargar para actualizar botón toggle
+    setTimeout(() => window.location.reload(), 800);
+  } else {
+    showToast('error', data.message);
+  }
+}
+
+// ── Cambiar rol ─────────────────────────────────────────────────────────────
+async function cambiarRol(userId, rolId) {
+  const resp = await afFetch(`/admin/usuarios/${userId}/rol`, {
+    method: 'POST',
+    body: JSON.stringify({ rol_id: rolId || null }),
+  });
+  const data = await resp.json();
+  if (data.success) {
+    showToast('success', data.message);
+  } else {
+    showToast('error', data.message);
+  }
+}
+
+// ── Reset contraseña ────────────────────────────────────────────────────────
+async function resetPassword(userId, nombre) {
+  const { value: password } = await Swal.fire({
+    title: `Nueva contraseña para ${nombre}`,
+    input: 'password',
+    inputLabel: 'Mínimo 8 caracteres',
+    inputAttributes: { minlength: 8, autocomplete: 'new-password' },
+    showCancelButton: true,
+    confirmButtonText: 'Actualizar',
+    cancelButtonText: 'Cancelar',
+    inputValidator: v => {
+      if (!v || v.length < 8) return 'Mínimo 8 caracteres.';
+    },
+  });
+  if (!password) return;
+
+  const resp = await afFetch(`/admin/usuarios/${userId}/reset-password`, {
+    method: 'POST',
+    body: JSON.stringify({ password }),
+  });
+  const data = await resp.json();
+  if (data.success) {
+    showToast('success', data.message);
+  } else {
+    showToast('error', data.message);
+  }
+}
+</script>
+{% endblock %}

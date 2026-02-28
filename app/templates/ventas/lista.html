@@ -1,0 +1,292 @@
+{% extends 'base.html' %}
+{% block title %}Comprobantes{% endblock %}
+
+{% block extra_css %}
+<style>
+  .filter-bar { background: var(--af-surface); border: 1px solid var(--af-border); border-radius: var(--af-radius); padding: 0.85rem 1rem; margin-bottom: 1rem; }
+  .filter-bar .form-control, .filter-bar .form-select {
+    background: var(--af-surface-2); border-color: var(--af-border); color: var(--af-text);
+    font-size: 0.82rem;
+  }
+  .filter-bar .form-control:focus, .filter-bar .form-select:focus {
+    border-color: var(--af-primary); box-shadow: none;
+  }
+  .table-comprobantes { font-size: 0.82rem; }
+  .table-comprobantes thead th { background: var(--af-surface-2); color: var(--af-text-muted); font-weight: 600; border-bottom: 1px solid var(--af-border); white-space: nowrap; }
+  .table-comprobantes td, .table-comprobantes th { vertical-align: middle; border-color: var(--af-border); color: var(--af-text); padding: 0.5rem 0.6rem; }
+  .table-comprobantes tbody tr:hover { background: var(--af-surface-2); }
+  .badge-tipo { display: inline-block; padding: 0.22rem 0.6rem; border-radius: 20px; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.03em; }
+  .tipo-FACTURA     { background: rgba(13,110,253,0.15); color: #4d8df7; }
+  .tipo-BOLETA      { background: rgba(108,117,125,0.15); color: #8a9099; }
+  .tipo-NOTA_CREDITO{ background: rgba(255,193,7,0.18); color: #e0a800; }
+  .tipo-NOTA_DEBITO { background: rgba(220,53,69,0.15); color: #e05c6d; }
+  .badge-estado { display: inline-block; padding: 0.22rem 0.6rem; border-radius: 20px; font-size: 0.7rem; font-weight: 700; }
+  .estado-PENDIENTE  { background: rgba(255,193,7,0.18); color: #e0a800; }
+  .estado-ENVIADO    { background: rgba(13,202,240,0.15); color: #0aa2c0; }
+  .estado-ACEPTADO   { background: rgba(25,135,84,0.15); color: #2db37a; }
+  .estado-RECHAZADO  { background: rgba(220,53,69,0.15); color: #e05c6d; }
+  .estado-BORRADOR   { background: rgba(108,117,125,0.12); color: #8a9099; }
+  .acciones-col { white-space: nowrap; }
+  .acciones-col a { color: var(--af-text-muted); margin-right: 0.3rem; font-size: 1rem; }
+  .acciones-col a:hover { color: var(--af-primary); }
+  .empty-state { padding: 3rem 1rem; text-align: center; color: var(--af-text-muted); }
+  .check-all-wrap { display: flex; align-items: center; gap: 0.5rem; }
+  .bulk-bar { display: none; background: var(--af-primary); color: #fff; border-radius: var(--af-radius); padding: 0.5rem 1rem; font-size: 0.82rem; align-items: center; gap: 0.75rem; margin-bottom: 0.75rem; }
+  .bulk-bar.show { display: flex; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+  <h4 class="fw-bold mb-0" style="color:var(--af-text);">Comprobantes</h4>
+  <a href="{{ url_for('ventas.nueva_venta') }}" class="btn btn-primary btn-sm">
+    <i class="bi bi-plus-lg me-1"></i>Nueva Venta
+  </a>
+</div>
+
+{# ── Barra de filtros ── #}
+<form method="GET" action="{{ url_for('ventas.lista_ventas') }}" id="form-filtros">
+<div class="filter-bar">
+  <div class="row g-2 align-items-end">
+    <div class="col-12 col-md-4 col-lg-3">
+      <input type="text" name="q" value="{{ filtros.q }}" class="form-control form-control-sm"
+        placeholder="Nro comprobante, cliente, orden…">
+    </div>
+    <div class="col-6 col-md-2">
+      <select name="tipo" class="form-select form-select-sm">
+        <option value="">Todos los tipos</option>
+        <option value="FACTURA"      {% if filtros.tipo=='FACTURA'       %}selected{% endif %}>Factura</option>
+        <option value="BOLETA"       {% if filtros.tipo=='BOLETA'        %}selected{% endif %}>Boleta</option>
+        <option value="NOTA_CREDITO" {% if filtros.tipo=='NOTA_CREDITO'  %}selected{% endif %}>Nota de Crédito</option>
+        <option value="NOTA_DEBITO"  {% if filtros.tipo=='NOTA_DEBITO'   %}selected{% endif %}>Nota de Débito</option>
+      </select>
+    </div>
+    <div class="col-6 col-md-2">
+      <select name="estado" class="form-select form-select-sm">
+        <option value="">Todos los estados</option>
+        <option value="PENDIENTE"  {% if filtros.estado=='PENDIENTE'  %}selected{% endif %}>Pendiente</option>
+        <option value="ENVIADO"    {% if filtros.estado=='ENVIADO'    %}selected{% endif %}>Enviado</option>
+        <option value="ACEPTADO"   {% if filtros.estado=='ACEPTADO'   %}selected{% endif %}>Aceptado</option>
+        <option value="RECHAZADO"  {% if filtros.estado=='RECHAZADO'  %}selected{% endif %}>Rechazado</option>
+        <option value="BORRADOR"   {% if filtros.estado=='BORRADOR'   %}selected{% endif %}>Borrador</option>
+      </select>
+    </div>
+    <div class="col-6 col-md-2">
+      <input type="date" name="fecha_ini" value="{{ filtros.fecha_ini }}" class="form-control form-control-sm" title="Desde">
+    </div>
+    <div class="col-6 col-md-2">
+      <input type="date" name="fecha_fin" value="{{ filtros.fecha_fin }}" class="form-control form-control-sm" title="Hasta">
+    </div>
+    <div class="col-12 col-md-auto d-flex gap-2">
+      <button type="submit" class="btn btn-primary btn-sm">
+        <i class="bi bi-search"></i>
+      </button>
+      <a href="{{ url_for('ventas.lista_ventas') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-x-lg"></i>
+      </a>
+    </div>
+  </div>
+</div>
+</form>
+
+{# ── Barra de acciones masivas ── #}
+<div class="bulk-bar" id="bulk-bar">
+  <i class="bi bi-check2-square"></i>
+  <span id="bulk-count">0</span> seleccionados
+  <button class="btn btn-sm btn-light ms-auto" onclick="enviarLote()">
+    <i class="bi bi-send me-1"></i>Enviar a SUNAT
+  </button>
+</div>
+
+{# ── Tabla ── #}
+<div class="af-card" style="overflow-x:auto;">
+  {% if comprobantes.items %}
+  <table class="table table-comprobantes mb-0">
+    <thead>
+      <tr>
+        <th style="width:36px;">
+          <input type="checkbox" id="check-all" title="Seleccionar todos">
+        </th>
+        <th>N° Orden</th>
+        <th>Tipo</th>
+        <th>Comprobante</th>
+        <th>Cliente</th>
+        <th>Documento</th>
+        <th class="text-end">Total</th>
+        <th class="text-end">IGV</th>
+        <th>Estado</th>
+        <th>Fecha</th>
+        <th>Acciones</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for c in comprobantes.items %}
+      <tr>
+        <td>
+          <input type="checkbox" class="row-check" value="{{ c.id }}"
+            data-estado="{{ c.estado }}"
+            {% if c.estado in ('ACEPTADO','ENVIADO') %}disabled{% endif %}>
+        </td>
+        <td style="color:var(--af-text-muted);">{{ c.numero_orden or '—' }}</td>
+        <td>
+          <span class="badge-tipo tipo-{{ c.tipo_comprobante }}">
+            {{ {'FACTURA':'Factura','BOLETA':'Boleta','NOTA_CREDITO':'NC','NOTA_DEBITO':'ND'}[c.tipo_comprobante] }}
+          </span>
+        </td>
+        <td>
+          <a href="{{ url_for('ventas.detalle_venta', comp_id=c.id) }}"
+             style="color:var(--af-primary); font-weight:600; text-decoration:none;">
+            {{ c.numero_completo }}
+          </a>
+        </td>
+        <td>{{ c.cliente.nombre_completo }}</td>
+        <td style="color:var(--af-text-muted);">
+          {{ c.cliente.tipo_documento }} {{ c.cliente.numero_documento }}
+        </td>
+        <td class="text-end fw-semibold">S/ {{ '%.2f'|format(c.total) }}</td>
+        <td class="text-end" style="color:var(--af-text-muted);">S/ {{ '%.2f'|format(c.total_igv) }}</td>
+        <td><span class="badge-estado estado-{{ c.estado }}">{{ c.estado }}</span></td>
+        <td style="color:var(--af-text-muted); white-space:nowrap;">
+          {{ c.fecha_emision.strftime('%d/%m/%Y %H:%M') }}
+        </td>
+        <td class="acciones-col">
+          <a href="{{ url_for('ventas.detalle_venta', comp_id=c.id) }}" title="Ver detalle">
+            <i class="bi bi-eye"></i>
+          </a>
+          <a href="{{ url_for('comprobantes.descargar_pdf', comp_id=c.id) }}" title="PDF">
+            <i class="bi bi-file-earmark-pdf"></i>
+          </a>
+          {% if c.xml_path %}
+          <a href="{{ url_for('comprobantes.descargar_xml', comp_id=c.id) }}" title="XML">
+            <i class="bi bi-file-earmark-code"></i>
+          </a>
+          {% endif %}
+          {% if c.cdr_path %}
+          <a href="{{ url_for('comprobantes.descargar_cdr', comp_id=c.id) }}" title="CDR">
+            <i class="bi bi-file-earmark-check"></i>
+          </a>
+          {% endif %}
+          {% if c.estado == 'PENDIENTE' %}
+          <a href="#" onclick="reenviarSunat({{ c.id }})" title="Enviar a SUNAT">
+            <i class="bi bi-cloud-upload" style="color:#0dcaf0;"></i>
+          </a>
+          {% endif %}
+          {% if c.tipo_comprobante in ('FACTURA','BOLETA') and c.estado in ('ENVIADO','ACEPTADO') %}
+          <a href="{{ url_for('notas.nueva_nc', comp_ref_id=c.id) }}" title="Nota de Crédito" style="color:#e0a800;">
+            <i class="bi bi-receipt-cutoff"></i>
+          </a>
+          {% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+
+  {# ── Paginación ── #}
+  {% if comprobantes.pages > 1 %}
+  <div class="d-flex justify-content-between align-items-center px-3 py-2"
+       style="border-top:1px solid var(--af-border); font-size:0.8rem; color:var(--af-text-muted);">
+    <span>
+      Mostrando {{ comprobantes.per_page * (comprobantes.page - 1) + 1 }}–
+      {{ [comprobantes.per_page * comprobantes.page, comprobantes.total]|min }}
+      de {{ comprobantes.total }} comprobantes
+    </span>
+    <nav>
+      <ul class="pagination pagination-sm mb-0">
+        <li class="page-item {% if not comprobantes.has_prev %}disabled{% endif %}">
+          <a class="page-link" href="{{ url_for('ventas.lista_ventas', page=comprobantes.prev_num, **filtros) }}">
+            <i class="bi bi-chevron-left"></i>
+          </a>
+        </li>
+        {% for p in comprobantes.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+          {% if p %}
+            <li class="page-item {% if p == comprobantes.page %}active{% endif %}">
+              <a class="page-link" href="{{ url_for('ventas.lista_ventas', page=p, **filtros) }}">{{ p }}</a>
+            </li>
+          {% else %}
+            <li class="page-item disabled"><span class="page-link">…</span></li>
+          {% endif %}
+        {% endfor %}
+        <li class="page-item {% if not comprobantes.has_next %}disabled{% endif %}">
+          <a class="page-link" href="{{ url_for('ventas.lista_ventas', page=comprobantes.next_num, **filtros) }}">
+            <i class="bi bi-chevron-right"></i>
+          </a>
+        </li>
+      </ul>
+    </nav>
+  </div>
+  {% endif %}
+
+  {% else %}
+  <div class="empty-state">
+    <i class="bi bi-inbox" style="font-size:2rem; opacity:0.3; display:block; margin-bottom:0.5rem;"></i>
+    <p class="mb-2">No se encontraron comprobantes.</p>
+    <a href="{{ url_for('ventas.nueva_venta') }}" class="btn btn-primary btn-sm">
+      <i class="bi bi-plus-lg me-1"></i>Crear primera venta
+    </a>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// ── Checkbox master ──
+const checkAll = document.getElementById('check-all');
+const bulkBar  = document.getElementById('bulk-bar');
+const bulkCount = document.getElementById('bulk-count');
+
+function actualizarBulkBar() {
+  const checks = document.querySelectorAll('.row-check:not(:disabled):checked');
+  bulkCount.textContent = checks.length;
+  bulkBar.classList.toggle('show', checks.length > 0);
+  if (checkAll) checkAll.indeterminate = (checks.length > 0 && checks.length < document.querySelectorAll('.row-check:not(:disabled)').length);
+}
+
+if (checkAll) {
+  checkAll.addEventListener('change', () => {
+    document.querySelectorAll('.row-check:not(:disabled)').forEach(c => c.checked = checkAll.checked);
+    actualizarBulkBar();
+  });
+}
+document.querySelectorAll('.row-check').forEach(c =>
+  c.addEventListener('change', actualizarBulkBar)
+);
+
+// ── Reenviar individual a SUNAT ──
+async function reenviarSunat(compId) {
+  const ok = await Swal.fire({
+    title: 'Reenviar a SUNAT',
+    text: 'Se intentará enviar este comprobante nuevamente.',
+    icon: 'question', showCancelButton: true,
+    confirmButtonText: '<i class="bi bi-cloud-upload"></i> Enviar',
+    confirmButtonColor: '#0d6efd',
+    background: 'var(--af-surface)', color: 'var(--af-text)',
+  });
+  if (!ok.isConfirmed) return;
+  try {
+    const res = await afFetch(`/comprobantes/${compId}/reenviar`, { method: 'POST' });
+    showToast(res.success ? 'Enviado' : 'Error', res.message, res.success ? 'success' : 'danger');
+    if (res.success) setTimeout(() => location.reload(), 1500);
+  } catch(e) { showToast('Error', e.message, 'danger'); }
+}
+
+// ── Envío lote ──
+async function enviarLote() {
+  const ids = [...document.querySelectorAll('.row-check:checked')].map(c => c.value);
+  if (!ids.length) return;
+  const ok = await Swal.fire({
+    title: `Enviar ${ids.length} comprobante(s) a SUNAT`,
+    icon: 'question', showCancelButton: true,
+    confirmButtonText: 'Enviar', confirmButtonColor: '#0d6efd',
+    background: 'var(--af-surface)', color: 'var(--af-text)',
+  });
+  if (!ok.isConfirmed) return;
+  try {
+    const res = await afFetch('/comprobantes/enviar-lote', { method: 'POST', body: { ids } });
+    showToast('Lote procesado', res.message, 'info');
+    setTimeout(() => location.reload(), 1500);
+  } catch(e) { showToast('Error', e.message, 'danger'); }
+}
+</script>
+{% endblock %}

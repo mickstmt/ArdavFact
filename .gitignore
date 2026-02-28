@@ -1,0 +1,63 @@
+# === Variables de entorno (NUNCA commitear) ===
+.env
+.env.local
+.env.production
+
+# === Configuración local de herramientas ===
+.claude/
+.env.local
+.env.production
+
+# === Certificados digitales (NUNCA commitear) ===
+certificados/*.pfx
+certificados/*.p12
+certificados/*.pem
+certificados/*.cer
+
+# === Archivos generados por SUNAT ===
+comprobantes/
+uploads/
+
+# === Python ===
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# === Virtual Environments ===
+venv/
+.venv/
+env/
+ENV/
+
+# === pytest ===
+.pytest_cache/
+.coverage
+htmlcov/
+
+# === IDEs ===
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# === OS ===
+.DS_Store
+Thumbs.db
+
+# === Flask ===
+instance/
+*.db
+*.sqlite3
+
+# === Logs ===
+*.log
+logs/
+
+# === Migraciones (solo ignorar si se prefiere, normalmente se commitean) ===
+# migrations/  # NO ignorar — las migraciones van al repo

@@ -1,0 +1,195 @@
+{% extends 'base.html' %}
+{% block title %}Nota de Crédito — {{ comp_ref.numero_completo }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .nc-ref-card { background: var(--af-surface-2); border: 1px solid rgba(245,158,11,0.3); border-radius: var(--af-radius); padding: 1rem 1.25rem; margin-bottom: 1.25rem; }
+  .nc-ref-label { font-size: 0.72rem; color: var(--af-text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+  .nc-ref-value { font-size: 0.88rem; color: var(--af-text); font-weight: 500; }
+  .items-preview { font-size: 0.8rem; }
+  .items-preview th { background: var(--af-surface-2); color: var(--af-text-muted); font-size: 0.75rem; border-color: var(--af-border); }
+  .items-preview td { border-color: var(--af-border); color: var(--af-text); }
+  .nc-total-box { background: var(--af-surface-2); border-radius: var(--af-radius); padding: 0.85rem 1rem; font-size: 0.85rem; }
+  .nc-total-row { display: flex; justify-content: space-between; color: var(--af-text-muted); padding: 0.15rem 0; }
+  .nc-total-row.grand { font-weight: 700; color: var(--af-text); font-size: 1rem; border-top: 1px solid var(--af-border); margin-top: 0.4rem; padding-top: 0.4rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center gap-2 mb-3">
+  <a href="{{ url_for('ventas.detalle_venta', comp_id=comp_ref.id) }}" style="color:var(--af-text-muted); text-decoration:none;">
+    <i class="bi bi-chevron-left"></i>
+  </a>
+  <h4 class="fw-bold mb-0" style="color:var(--af-text);">Nueva Nota de Crédito</h4>
+</div>
+
+{# Referencia #}
+<div class="nc-ref-card">
+  <div class="d-flex align-items-center gap-2 mb-2" style="color:#e0a800;">
+    <i class="bi bi-receipt-cutoff"></i>
+    <strong style="font-size:0.82rem;">Comprobante de referencia</strong>
+  </div>
+  <div class="row g-2">
+    <div class="col-6 col-md-3">
+      <div class="nc-ref-label">Número</div>
+      <div class="nc-ref-value">{{ comp_ref.numero_completo }}</div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="nc-ref-label">Tipo</div>
+      <div class="nc-ref-value">{{ comp_ref.tipo_comprobante }}</div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="nc-ref-label">Fecha</div>
+      <div class="nc-ref-value">{{ comp_ref.fecha_emision.strftime('%d/%m/%Y') }}</div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="nc-ref-label">Total</div>
+      <div class="nc-ref-value fw-bold" style="color:var(--af-primary);">S/ {{ '%.2f'|format(comp_ref.total) }}</div>
+    </div>
+    <div class="col-12">
+      <div class="nc-ref-label">Cliente</div>
+      <div class="nc-ref-value">{{ comp_ref.cliente.nombre_completo }} — {{ comp_ref.cliente.tipo_documento }} {{ comp_ref.cliente.numero_documento }}</div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3">
+  <div class="col-12 col-lg-7">
+
+    {# Formulario NC #}
+    <div class="af-card p-4">
+      <h6 class="fw-semibold mb-3" style="color:var(--af-text);">Datos de la Nota de Crédito</h6>
+
+      <div class="mb-3">
+        <label class="form-label" style="font-size:0.82rem; color:var(--af-text-muted);">Motivo (Catálogo 09 SUNAT) *</label>
+        <select id="motivo-select" class="form-select form-select-sm" style="background:var(--af-surface-2); border-color:var(--af-border); color:var(--af-text);">
+          {% for codigo, descripcion in motivos.items() %}
+          <option value="{{ codigo }}">{{ codigo }} — {{ descripcion }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label" style="font-size:0.82rem; color:var(--af-text-muted);">Descripción adicional (opcional)</label>
+        <input type="text" id="motivo-desc" class="form-control form-control-sm"
+          placeholder="Ej: Error en precio del producto X"
+          style="background:var(--af-surface-2); border-color:var(--af-border); color:var(--af-text);">
+      </div>
+
+      <div class="alert alert-warning" style="font-size:0.82rem; border-radius:var(--af-radius);">
+        <i class="bi bi-info-circle me-1"></i>
+        La NC anulará el comprobante original <strong>{{ comp_ref.numero_completo }}</strong> por el monto total.
+        Se clonarán todos los ítems del comprobante de referencia.
+      </div>
+
+      <div class="d-flex gap-2 mt-3">
+        <button id="btn-emitir-nc" onclick="emitirNC()" class="btn btn-warning">
+          <i class="bi bi-receipt-cutoff me-1"></i>Emitir Nota de Crédito
+        </button>
+        <a href="{{ url_for('ventas.detalle_venta', comp_id=comp_ref.id) }}" class="btn btn-outline-secondary">
+          Cancelar
+        </a>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="col-12 col-lg-5">
+    {# Vista previa de ítems #}
+    <div class="af-card" style="padding:0; overflow:hidden;">
+      <div style="padding:0.75rem 1rem; border-bottom:1px solid var(--af-border); font-size:0.82rem; font-weight:600; color:var(--af-text);">
+        Ítems que se incluirán ({{ comp_ref.items|length }})
+      </div>
+      <div style="overflow-x:auto; max-height:250px; overflow-y:auto;">
+        <table class="table items-preview mb-0">
+          <thead>
+            <tr>
+              <th>Producto</th>
+              <th class="text-center">Cant.</th>
+              <th class="text-end">Subtotal</th>
+            </tr>
+          </thead>
+          <tbody>
+          {% for item in comp_ref.items %}
+            <tr>
+              <td>{{ item.producto_nombre }}</td>
+              <td class="text-center">{{ '%.0f'|format(item.cantidad) }}</td>
+              <td class="text-end">S/ {{ '%.2f'|format(item.subtotal_con_igv) }}</td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    {# Totales #}
+    <div class="af-card p-3 mt-3">
+      <div class="nc-total-box">
+        <div class="nc-total-row">
+          <span>Op. Gravadas</span><span>S/ {{ '%.2f'|format(comp_ref.total_operaciones_gravadas) }}</span>
+        </div>
+        <div class="nc-total-row">
+          <span>I.G.V. 18%</span><span>S/ {{ '%.2f'|format(comp_ref.total_igv) }}</span>
+        </div>
+        {% if comp_ref.costo_envio and comp_ref.costo_envio > 0 %}
+        <div class="nc-total-row">
+          <span>Envío</span><span>S/ {{ '%.2f'|format(comp_ref.costo_envio) }}</span>
+        </div>
+        {% endif %}
+        <div class="nc-total-row grand">
+          <span>TOTAL NC</span><span>S/ {{ '%.2f'|format(comp_ref.total) }}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const COMP_REF_ID = {{ comp_ref.id }};
+
+async function emitirNC() {
+  const motivoCodigo = document.getElementById('motivo-select').value;
+  const motivoDesc   = document.getElementById('motivo-desc').value.trim();
+
+  const motivos = {
+    {% for codigo, desc in motivos.items() %}
+    '{{ codigo }}': '{{ desc }}',
+    {% endfor %}
+  };
+  const motivoTexto = motivoDesc || motivos[motivoCodigo] || '';
+
+  const confirm = await Swal.fire({
+    title: 'Emitir Nota de Crédito',
+    html: `<div style="text-align:left; font-size:0.88rem;">
+      <div><b>Referencia:</b> {{ comp_ref.numero_completo }}</div>
+      <div><b>Motivo:</b> ${motivoCodigo} — ${motivoTexto}</div>
+      <div style="font-size:1rem; font-weight:700; color:#e0a800; margin-top:0.5rem;">Total: S/ {{ '%.2f'|format(comp_ref.total) }}</div>
+    </div>`,
+    icon: 'warning', showCancelButton: true,
+    confirmButtonText: '<i class="bi bi-receipt-cutoff"></i> Emitir NC',
+    confirmButtonColor: '#f59e0b',
+    cancelButtonText: 'Cancelar',
+    background: 'var(--af-surface)', color: 'var(--af-text)',
+  });
+  if (!confirm.isConfirmed) return;
+
+  const btn = document.getElementById('btn-emitir-nc');
+  btnLoading(btn, 'Emitiendo...');
+  try {
+    const res = await afFetch('/notas/nc/crear', {
+      method: 'POST',
+      body: { comp_ref_id: COMP_REF_ID, motivo_codigo: motivoCodigo, motivo_descripcion: motivoDesc },
+    });
+    if (res.success) {
+      showToast('NC emitida', `${res.numero} — ${res.estado}`, 'success');
+      setTimeout(() => window.location.href = `/ventas/${res.comprobante_id}`, 1500);
+    } else {
+      showToast('Error', res.message, 'danger');
+    }
+  } catch(e) { showToast('Error', e.message, 'danger'); }
+  finally { btnRestore(btn); }
+}
+</script>
+{% endblock %}

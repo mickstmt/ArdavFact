@@ -1,0 +1,69 @@
+{% extends 'base.html' %}
+
+{% block title %}Registro{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center mt-4">
+  <div class="col-md-6 col-lg-5">
+    <div class="af-card p-4">
+      <h4 class="mb-4 fw-bold" style="color:var(--af-text);">
+        <i class="bi bi-person-plus me-2" style="color:var(--af-primary);"></i>Nueva Cuenta
+      </h4>
+
+      <form method="POST" novalidate>
+        {{ form.hidden_tag() }}
+
+        <div class="mb-3">
+          <label class="form-label" style="font-size:0.82rem; font-weight:600; color:var(--af-text-muted); text-transform:uppercase; letter-spacing:0.05em;">
+            {{ form.nombre.label.text }}
+          </label>
+          {{ form.nombre(class="af-form-control" + (" is-invalid" if form.nombre.errors else ""), placeholder="Nombre completo") }}
+          {% if form.nombre.errors %}<div class="text-danger" style="font-size:0.78rem; margin-top:3px;">{{ form.nombre.errors[0] }}</div>{% endif %}
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label" style="font-size:0.82rem; font-weight:600; color:var(--af-text-muted); text-transform:uppercase; letter-spacing:0.05em;">
+            {{ form.username.label.text }}
+          </label>
+          {{ form.username(class="af-form-control" + (" is-invalid" if form.username.errors else ""), placeholder="usuario") }}
+          {% if form.username.errors %}<div class="text-danger" style="font-size:0.78rem; margin-top:3px;">{{ form.username.errors[0] }}</div>{% endif %}
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label" style="font-size:0.82rem; font-weight:600; color:var(--af-text-muted); text-transform:uppercase; letter-spacing:0.05em;">
+            {{ form.email.label.text }}
+          </label>
+          {{ form.email(class="af-form-control" + (" is-invalid" if form.email.errors else ""), placeholder="email@ejemplo.com") }}
+          {% if form.email.errors %}<div class="text-danger" style="font-size:0.78rem; margin-top:3px;">{{ form.email.errors[0] }}</div>{% endif %}
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label" style="font-size:0.82rem; font-weight:600; color:var(--af-text-muted); text-transform:uppercase; letter-spacing:0.05em;">
+            {{ form.password.label.text }}
+          </label>
+          {{ form.password(class="af-form-control" + (" is-invalid" if form.password.errors else ""), placeholder="Mínimo 8 caracteres") }}
+          {% if form.password.errors %}<div class="text-danger" style="font-size:0.78rem; margin-top:3px;">{{ form.password.errors[0] }}</div>{% endif %}
+        </div>
+
+        <div class="mb-4">
+          <label class="form-label" style="font-size:0.82rem; font-weight:600; color:var(--af-text-muted); text-transform:uppercase; letter-spacing:0.05em;">
+            {{ form.confirm.label.text }}
+          </label>
+          {{ form.confirm(class="af-form-control" + (" is-invalid" if form.confirm.errors else ""), placeholder="Repite la contraseña") }}
+          {% if form.confirm.errors %}<div class="text-danger" style="font-size:0.78rem; margin-top:3px;">{{ form.confirm.errors[0] }}</div>{% endif %}
+        </div>
+
+        <button type="submit" class="af-btn-primary w-100" style="justify-content:center;">
+          <i class="bi bi-person-check"></i>Registrarse
+        </button>
+      </form>
+
+      <div class="text-center mt-3">
+        <a href="{{ url_for('auth.login') }}" style="font-size:0.85rem; color:var(--af-primary);">
+          ← Volver al login
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

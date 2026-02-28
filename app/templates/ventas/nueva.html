@@ -1,0 +1,660 @@
+{% extends 'base.html' %}
+{% block title %}Nueva Venta{% endblock %}
+
+{% block extra_css %}
+<style>
+  .pos-wrapper { display: flex; gap: 1rem; height: calc(100vh - var(--af-navbar-h) - 3rem); min-height: 500px; }
+  .pos-catalog { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  .pos-cart    { width: 400px; min-width: 340px; display: flex; flex-direction: column; }
+  .pos-panel { background: var(--af-surface); border: 1px solid var(--af-border); border-radius: var(--af-radius); }
+  .pos-panel-header { padding: 0.75rem 1rem; border-bottom: 1px solid var(--af-border); font-size:0.82rem; font-weight:600; color:var(--af-text); display:flex; align-items:center; gap:0.5rem; }
+  .pos-scroll { overflow-y: auto; flex: 1; }
+  .pos-scroll::-webkit-scrollbar { width: 4px; }
+  .pos-scroll::-webkit-scrollbar-thumb { background: var(--af-border); border-radius: 2px; }
+
+  /* Catálogo */
+  .prod-card { padding: 0.6rem 0.75rem; border-bottom: 1px solid var(--af-border); cursor: pointer; transition: background 0.12s; display: flex; align-items: center; gap: 0.65rem; }
+  .prod-card:hover { background: var(--af-surface-2); }
+  .prod-card:last-child { border-bottom: none; }
+  .prod-img { width: 38px; height: 38px; object-fit: cover; border-radius: 6px; flex-shrink: 0; background: var(--af-surface-2); }
+  .prod-name { font-size: 0.82rem; font-weight: 500; color: var(--af-text); line-height: 1.3; }
+  .prod-sku  { font-size: 0.72rem; color: var(--af-text-muted); }
+  .prod-price { font-size: 0.85rem; font-weight: 600; color: var(--af-primary); margin-left: auto; white-space: nowrap; }
+  .badge-variable { font-size: 0.65rem; background: rgba(13,110,253,0.12); color: #0d6efd; border-radius: 4px; padding: 1px 5px; font-weight: 600; }
+
+  /* Selector Tipo Comprobante */
+  .tipo-selector { display: flex; gap: 0.5rem; padding: 0.65rem 0.75rem; border-bottom: 1px solid var(--af-border); }
+  .tipo-btn { flex: 1; padding: 0.45rem; border: 2px solid var(--af-border); background: var(--af-surface-2); border-radius: 8px; cursor: pointer; font-size: 0.8rem; font-weight: 700; letter-spacing: 0.04em; text-align: center; transition: all 0.15s; color: var(--af-text-muted); }
+  .tipo-btn:hover { border-color: var(--af-primary); color: var(--af-primary); }
+  .tipo-btn.active-boleta { border-color: #198754; background: rgba(25,135,84,0.1); color: #198754; }
+  .tipo-btn.active-factura { border-color: #0d6efd; background: rgba(13,110,253,0.1); color: #0d6efd; }
+  .tipo-btn.locked { cursor: not-allowed; opacity: 0.7; }
+
+  /* Carrito */
+  .cart-item { padding: 0.6rem 0.75rem; border-bottom: 1px solid var(--af-border); }
+  .cart-item:last-child { border-bottom: none; }
+  .cart-item-name { font-size: 0.8rem; font-weight: 500; color: var(--af-text); }
+  .cart-item-detail { font-size: 0.72rem; color: var(--af-text-muted); }
+  .qty-btn { width: 24px; height: 24px; border: 1px solid var(--af-border); background: var(--af-surface-2); color: var(--af-text); border-radius: 4px; cursor: pointer; font-size: 0.85rem; display: inline-flex; align-items: center; justify-content: center; transition: all 0.12s; padding: 0; }
+  .qty-btn:hover { border-color: var(--af-primary); color: var(--af-primary); }
+  .qty-input { width: 42px; text-align: center; border: 1px solid var(--af-border); background: var(--af-surface); color: var(--af-text); border-radius: 4px; font-size: 0.82rem; padding: 0.1rem; }
+  .qty-input:focus { outline: none; border-color: var(--af-primary); }
+
+  /* Totales */
+  .total-row { display: flex; justify-content: space-between; font-size: 0.82rem; color: var(--af-text-muted); padding: 0.2rem 0; }
+  .total-row.grand { font-size: 1rem; font-weight: 700; color: var(--af-text); padding-top: 0.5rem; border-top: 1px solid var(--af-border); margin-top: 0.25rem; }
+  .client-badge { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.75rem; background: var(--af-surface-2); border: 1px solid var(--af-border); border-radius: var(--af-radius); font-size: 0.82rem; }
+
+  /* Modal variaciones */
+  .attr-group-title { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; color: var(--af-text-muted); letter-spacing: 0.05em; margin-bottom: 0.5rem; }
+  .attr-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 1rem; }
+  .attr-chip { padding: 0.35rem 0.85rem; border: 2px solid var(--af-border); border-radius: 8px; font-size: 0.82rem; font-weight: 500; cursor: pointer; background: var(--af-surface); color: var(--af-text); transition: all 0.15s; }
+  .attr-chip:hover { border-color: #0d6efd; color: #0d6efd; }
+  .attr-chip.selected { border-color: #0d6efd; background: #0d6efd; color: #fff; }
+  .var-preview { border: 1px solid var(--af-border); border-radius: var(--af-radius); padding: 1rem; text-align: center; background: var(--af-surface-2); }
+  .var-preview-img { width: 100px; height: 100px; object-fit: contain; border-radius: 8px; margin-bottom: 0.5rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center gap-2 mb-3">
+  <a href="{{ url_for('dashboard.index') }}" style="color:var(--af-text-muted); text-decoration:none;">
+    <i class="bi bi-chevron-left"></i>
+  </a>
+  <h4 class="fw-bold mb-0" style="color:var(--af-text);">Nueva Venta</h4>
+</div>
+
+<div class="pos-wrapper">
+
+  {# ── CATÁLOGO ── #}
+  <div class="pos-catalog">
+    <div class="pos-panel d-flex flex-column h-100">
+      <div style="padding:0.75rem; border-bottom:1px solid var(--af-border); display:flex; gap:0.5rem; flex-wrap:wrap;">
+        <div style="flex:1; min-width:180px; position:relative;">
+          <i class="bi bi-search" style="position:absolute; left:0.65rem; top:50%; transform:translateY(-50%); color:var(--af-text-muted); font-size:0.85rem;"></i>
+          <input type="text" id="prod-search" class="af-form-control" placeholder="Buscar por nombre o SKU..." style="padding-left:2rem; font-size:0.82rem;">
+        </div>
+        <select id="cat-filter" class="af-form-control" style="width:auto; min-width:140px; font-size:0.82rem;">
+          <option value="">Todas las categorías</option>
+          {% for cat in categorias %}
+          <option value="{{ cat.id }}">{{ cat.nombre }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="pos-scroll" id="prod-list">
+        <div class="text-center py-5" style="color:var(--af-text-muted); font-size:0.85rem;">
+          <i class="bi bi-box-seam" style="font-size:2rem; opacity:0.3; display:block; margin-bottom:0.5rem;"></i>
+          Selecciona una categoría o busca un producto
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# ── CARRITO ── #}
+  <div class="pos-cart d-flex flex-column gap-2">
+
+    {# Tipo comprobante — selector SIEMPRE visible #}
+    <div class="pos-panel">
+      <div class="pos-panel-header">
+        <i class="bi bi-file-earmark-text" style="color:var(--af-primary);"></i>
+        Tipo de comprobante
+      </div>
+      <div class="tipo-selector">
+        <button id="btn-boleta" class="tipo-btn active-boleta" onclick="setTipo('BOLETA')">
+          <i class="bi bi-receipt"></i> BOLETA
+          <div style="font-size:0.65rem; font-weight:400; margin-top:1px;" id="serie-boleta-label">{{ serie_boleta }}</div>
+        </button>
+        <button id="btn-factura" class="tipo-btn" onclick="setTipo('FACTURA')">
+          <i class="bi bi-file-earmark-richtext"></i> FACTURA
+          <div style="font-size:0.65rem; font-weight:400; margin-top:1px;" id="serie-factura-label">{{ serie_factura }}</div>
+        </button>
+      </div>
+      <div id="tipo-hint" style="padding:0.3rem 0.75rem 0.5rem; font-size:0.72rem; color:var(--af-text-muted);">
+        <i class="bi bi-info-circle"></i> BOLETA para DNI · FACTURA para RUC (auto-detectado)
+      </div>
+    </div>
+
+    {# Cliente #}
+    <div class="pos-panel">
+      <div class="pos-panel-header">
+        <i class="bi bi-person" style="color:var(--af-primary);"></i>Cliente
+      </div>
+      <div style="padding:0.75rem;">
+        <div id="client-search-area">
+          <div style="display:flex; gap:0.5rem;">
+            <div style="flex:1; position:relative;">
+              <i class="bi bi-search" style="position:absolute; left:0.65rem; top:50%; transform:translateY(-50%); color:var(--af-text-muted); font-size:0.85rem;"></i>
+              <input type="text" id="client-search" class="af-form-control"
+                     placeholder="DNI, RUC o nombre..." style="padding-left:2rem; font-size:0.82rem;">
+            </div>
+            <button id="btn-consultar-doc" class="af-btn-primary" title="Consultar DNI/RUC" style="padding:0.55rem 0.75rem;">
+              <i class="bi bi-cloud-download"></i>
+            </button>
+          </div>
+          <div id="client-results" style="display:none; margin-top:0.4rem; border:1px solid var(--af-border); border-radius:var(--af-radius); overflow:hidden; background:var(--af-surface); max-height:180px; overflow-y:auto; position:relative; z-index:10;"></div>
+        </div>
+        <div id="client-selected" style="display:none;">
+          <div class="client-badge">
+            <i class="bi bi-person-check" style="color:#198754; flex-shrink:0;"></i>
+            <div style="flex:1; min-width:0;">
+              <div id="client-name" style="font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:0.82rem;"></div>
+              <div id="client-doc" style="font-size:0.72rem; color:var(--af-text-muted);"></div>
+            </div>
+            <button onclick="limpiarCliente()" style="background:none; border:none; color:var(--af-text-muted); cursor:pointer; padding:0; font-size:0.85rem;" title="Cambiar">
+              <i class="bi bi-x-circle"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {# Ítems #}
+    <div class="pos-panel d-flex flex-column" style="flex:1; overflow:hidden;">
+      <div class="pos-panel-header">
+        <i class="bi bi-cart3" style="color:var(--af-primary);"></i>Carrito
+        <span id="cart-count" class="ms-auto" style="font-size:0.72rem; color:var(--af-text-muted);">0 ítems</span>
+      </div>
+      <div class="pos-scroll" id="cart-items">
+        <div id="cart-empty" class="text-center py-4" style="color:var(--af-text-muted); font-size:0.82rem;">
+          <i class="bi bi-cart" style="font-size:1.5rem; opacity:0.3; display:block; margin-bottom:0.4rem;"></i>
+          Agrega productos al carrito
+        </div>
+      </div>
+    </div>
+
+    {# Totales #}
+    <div class="pos-panel" style="padding:0.85rem 1rem;">
+      <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.6rem;">
+        <label style="font-size:0.78rem; color:var(--af-text-muted); white-space:nowrap; margin:0;">Costo envío S/:</label>
+        <input type="number" id="costo-envio" value="0" min="0" step="0.01"
+               class="af-form-control" style="flex:1; font-size:0.82rem; text-align:right;"
+               oninput="calcularTotales()">
+      </div>
+      <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.75rem;">
+        <label style="font-size:0.78rem; color:var(--af-text-muted); white-space:nowrap; margin:0;">N° Orden:</label>
+        <input type="text" id="numero-orden" placeholder="WooCommerce #"
+               class="af-form-control" style="flex:1; font-size:0.82rem;">
+      </div>
+      <div class="total-row"><span>Base imponible</span><span id="t-base">S/ 0.00</span></div>
+      <div class="total-row"><span>IGV 18%</span><span id="t-igv">S/ 0.00</span></div>
+      <div class="total-row"><span>Envío (gravado)</span><span id="t-envio">S/ 0.00</span></div>
+      <div class="total-row grand"><span>TOTAL</span><span id="t-total">S/ 0.00</span></div>
+      <button id="btn-emitir" class="af-btn-primary w-100 mt-3" style="justify-content:center; font-size:0.9rem;" onclick="emitirComprobante()">
+        <i class="bi bi-send"></i>Emitir Comprobante
+      </button>
+    </div>
+
+  </div>
+</div>
+
+{# ── MODAL VARIACIONES ── #}
+<div class="modal fade" id="modal-var" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content" style="border-radius:12px; overflow:hidden;">
+      <div class="modal-header" style="background:var(--af-surface); border-bottom:1px solid var(--af-border);">
+        <h6 class="modal-title fw-bold" id="var-producto-nombre">Seleccionar variación</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" style="background:var(--af-surface); padding:1.25rem;">
+        <div class="row g-3">
+          {# Preview izquierda #}
+          <div class="col-md-4">
+            <div class="var-preview">
+              <img id="var-img" src="" class="var-preview-img" onerror="this.style.display='none'">
+              <div id="var-sku" style="font-size:0.75rem; color:var(--af-text-muted); margin-bottom:0.3rem;">SKU: —</div>
+              <div id="var-precio" style="font-size:1.2rem; font-weight:700; color:var(--af-primary);">S/ 0.00</div>
+              <div id="var-summary" style="font-size:0.75rem; color:var(--af-text-muted); margin-top:0.4rem;">Elige las opciones...</div>
+            </div>
+          </div>
+          {# Atributos derecha #}
+          <div class="col-md-8">
+            <div id="var-attrs"></div>
+            <div class="mt-3">
+              <button id="btn-add-var" class="af-btn-primary w-100" style="justify-content:center;" disabled onclick="agregarVariacionSeleccionada()">
+                <i class="bi bi-cart-plus"></i> Agregar al carrito
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const SERIE_FACTURA = {{ serie_factura | tojson }};
+  const SERIE_BOLETA  = {{ serie_boleta  | tojson }};
+</script>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// ── Estado global ──
+let cartItems       = [];
+let clienteActual   = null;
+let tipoComprobante = 'BOLETA';   // default
+let serieActual     = SERIE_BOLETA;
+let tipoLocked      = false;      // true cuando el cliente forza el tipo
+
+// ── Tipo de comprobante ──
+function setTipo(tipo, locked) {
+  tipoComprobante = tipo;
+  serieActual     = tipo === 'FACTURA' ? SERIE_FACTURA : SERIE_BOLETA;
+  tipoLocked      = !!locked;
+
+  const btnB = document.getElementById('btn-boleta');
+  const btnF = document.getElementById('btn-factura');
+
+  btnB.classList.remove('active-boleta', 'active-factura', 'locked');
+  btnF.classList.remove('active-boleta', 'active-factura', 'locked');
+
+  if (tipo === 'BOLETA') {
+    btnB.classList.add('active-boleta');
+    if (locked) btnF.classList.add('locked');
+  } else {
+    btnF.classList.add('active-factura');
+    if (locked) btnB.classList.add('locked');
+  }
+
+  // Actualizar hint de cliente
+  const search = document.getElementById('client-search');
+  if (!clienteActual) {
+    search.placeholder = tipo === 'FACTURA' ? 'Busca por RUC...' : 'Busca por DNI o nombre...';
+  }
+}
+
+// ── Productos ──
+const prodSearch = document.getElementById('prod-search');
+const catFilter  = document.getElementById('cat-filter');
+const prodList   = document.getElementById('prod-list');
+
+catFilter.addEventListener('change', function () {
+  if (this.value) cargarPorCategoria(this.value);
+  else if (prodSearch.value.length >= 2) buscarProductos(prodSearch.value);
+  else resetProdList();
+});
+
+prodSearch.addEventListener('input', debounce(function () {
+  const q = this.value.trim();
+  if (q.length >= 2) buscarProductos(q);
+  else if (catFilter.value) cargarPorCategoria(catFilter.value);
+  else resetProdList();
+}, 350));
+
+async function cargarPorCategoria(catId) {
+  prodList.innerHTML = '<div class="text-center py-3" style="color:var(--af-text-muted); font-size:0.82rem;"><span class="spinner-border spinner-border-sm me-1"></span>Cargando...</div>';
+  try {
+    const res = await afFetch(`/api/productos-por-categoria/${catId}`);
+    renderProds(res.data || []);
+  } catch (e) { prodList.innerHTML = `<div class="text-center py-3 text-danger" style="font-size:0.82rem;">${e.message}</div>`; }
+}
+
+async function buscarProductos(q) {
+  try {
+    const res = await afFetch(`/api/buscar-productos?q=${encodeURIComponent(q)}`);
+    renderProds(res.data || []);
+  } catch (e) { console.error(e); }
+}
+
+function renderProds(prods) {
+  if (!prods.length) {
+    prodList.innerHTML = '<div class="text-center py-4" style="color:var(--af-text-muted); font-size:0.82rem;">Sin resultados</div>';
+    return;
+  }
+  prodList.innerHTML = prods.map(p => {
+    const pJson   = JSON.stringify(p).replace(/"/g, '&quot;');
+    const img     = p.imagen_url
+      ? `<img src="${p.imagen_url}" class="prod-img" loading="lazy" onerror="this.style.display='none'">`
+      : `<div class="prod-img d-flex align-items-center justify-content-center" style="color:var(--af-text-muted);"><i class="bi bi-box-seam"></i></div>`;
+    const noStock = p.stock_status !== 'instock' ? ' <span style="color:#dc3545;font-size:0.7rem;">Sin stock</span>' : '';
+    const varBadge = p.tipo === 'variable' ? ' <span class="badge-variable">Variaciones</span>' : '';
+    const accion  = p.tipo === 'variable'
+      ? `onclick="abrirModalVar(${pJson})"`
+      : `onclick="agregarAlCarrito(${pJson})"`;
+    // Precio: para variables mostrar rango real de variaciones (precio_min/precio_max del API)
+    let precioLabel;
+    if (p.tipo === 'variable') {
+      const pMin = (p.precio_min || p.precio).toFixed(2);
+      const pMax = (p.precio_max || p.precio).toFixed(2);
+      precioLabel = pMin === pMax
+        ? `<div class="prod-price">S/ ${pMin}</div>`
+        : `<div class="prod-price" style="font-size:0.78rem; text-align:right;">S/ ${pMin}<br><span style="font-size:0.68rem; color:var(--af-text-muted);">hasta ${pMax}</span></div>`;
+    } else {
+      precioLabel = `<div class="prod-price">S/ ${p.precio.toFixed(2)}</div>`;
+    }
+    return `<div class="prod-card" ${accion}>
+      ${img}
+      <div style="flex:1; min-width:0;">
+        <div class="prod-name">${p.nombre}${varBadge}</div>
+        <div class="prod-sku">${p.sku || ''}${noStock}</div>
+      </div>
+      ${precioLabel}
+    </div>`;
+  }).join('');
+}
+
+function resetProdList() {
+  prodList.innerHTML = '<div class="text-center py-5" style="color:var(--af-text-muted); font-size:0.85rem;"><i class="bi bi-box-seam" style="font-size:2rem; opacity:0.3; display:block; margin-bottom:0.5rem;"></i>Selecciona una categoría o busca un producto</div>';
+}
+
+// ── Carrito ──
+function agregarAlCarrito(p) {
+  const idx = cartItems.findIndex(i => i.sku === p.sku && !i.variacion_id);
+  if (idx >= 0) cartItems[idx].cantidad += 1;
+  else cartItems.push({
+    id: p.id, nombre: p.nombre, sku: p.sku || '',
+    precio_con_igv: p.precio, cantidad: 1,
+    tipo_afectacion_igv: '10', variacion_id: null, atributos: null,
+  });
+  renderCarrito();
+  calcularTotales();
+}
+
+function cambiarCantidad(idx, delta) {
+  cartItems[idx].cantidad += delta;
+  if (cartItems[idx].cantidad <= 0) cartItems.splice(idx, 1);
+  renderCarrito();
+  calcularTotales();
+}
+
+function setCantidad(idx, val) {
+  const n = parseFloat(val);
+  if (n > 0) { cartItems[idx].cantidad = n; calcularTotales(); }
+}
+
+function setPrecio(idx, val) {
+  const n = parseFloat(val);
+  if (n > 0) { cartItems[idx].precio_con_igv = n; renderCarrito(); calcularTotales(); }
+}
+
+function eliminarItem(idx) { cartItems.splice(idx, 1); renderCarrito(); calcularTotales(); }
+
+function renderCarrito() {
+  const container = document.getElementById('cart-items');
+  const emptyEl   = document.getElementById('cart-empty');
+  const countEl   = document.getElementById('cart-count');
+  if (!cartItems.length) {
+    emptyEl.style.display = '';
+    countEl.textContent = '0 ítems';
+    Array.from(container.children).forEach(c => { if (c.id !== 'cart-empty') c.remove(); });
+    return;
+  }
+  emptyEl.style.display = 'none';
+  countEl.textContent = `${cartItems.reduce((s, i) => s + i.cantidad, 0)} ítems`;
+  const html = cartItems.map((item, idx) => `
+    <div class="cart-item">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:0.4rem;">
+        <div style="flex:1; min-width:0;">
+          <div class="cart-item-name">${item.nombre}</div>
+          <div class="cart-item-detail">${item.sku}</div>
+        </div>
+        <button onclick="eliminarItem(${idx})" style="background:none; border:none; color:var(--af-text-muted); cursor:pointer; padding:0; font-size:0.8rem; flex-shrink:0;"><i class="bi bi-trash3"></i></button>
+      </div>
+      <div style="display:flex; align-items:center; gap:0.4rem; margin-top:0.35rem; flex-wrap:wrap;">
+        <button class="qty-btn" onclick="cambiarCantidad(${idx},-1)">−</button>
+        <input type="number" class="qty-input" value="${item.cantidad}" min="0.01" step="1" onchange="setCantidad(${idx},this.value)">
+        <button class="qty-btn" onclick="cambiarCantidad(${idx},1)">+</button>
+        <span style="font-size:0.72rem; color:var(--af-text-muted);">× S/</span>
+        <input type="number" class="qty-input" value="${item.precio_con_igv.toFixed(2)}" min="0.01" step="0.01"
+               style="width:58px;" onchange="setPrecio(${idx},this.value)" title="Precio unitario c/IGV">
+        <span style="font-size:0.82rem; font-weight:600; color:var(--af-text); margin-left:auto;">= S/ ${(item.precio_con_igv * item.cantidad).toFixed(2)}</span>
+      </div>
+    </div>`).join('');
+  container.innerHTML = html;
+  container.appendChild(emptyEl);
+  emptyEl.style.display = 'none';
+}
+
+// ── IGV ──
+function calcularTotales() {
+  let base = 0, igv = 0;
+  const envio = parseFloat(document.getElementById('costo-envio').value) || 0;
+  cartItems.forEach(item => {
+    if (item.tipo_afectacion_igv === '10') {
+      const b = item.precio_con_igv / 1.18;
+      base += b * item.cantidad;
+      igv  += (item.precio_con_igv - b) * item.cantidad;
+    } else { base += item.precio_con_igv * item.cantidad; }
+  });
+  let envioBase = 0;
+  if (envio > 0) { envioBase = envio / 1.18; base += envioBase; igv += envio - envioBase; }
+  document.getElementById('t-base').textContent  = formatMoney(base - envioBase);
+  document.getElementById('t-igv').textContent   = formatMoney(igv);
+  document.getElementById('t-envio').textContent = formatMoney(envio);
+  document.getElementById('t-total').textContent = formatMoney(base + igv);
+}
+
+// ── Clientes ──
+const clientSearch  = document.getElementById('client-search');
+const clientResults = document.getElementById('client-results');
+
+clientSearch.addEventListener('input', debounce(async function () {
+  const q = this.value.trim();
+  if (q.length < 2) { clientResults.style.display = 'none'; return; }
+  try {
+    const res = await afFetch(`/api/buscar-cliente?q=${encodeURIComponent(q)}`);
+    if (res.data.length) {
+      clientResults.innerHTML = res.data.map(c => {
+        const cJson = JSON.stringify(c).replace(/'/g, '&#39;');
+        return `<div onclick='seleccionarCliente(${cJson})' style="padding:0.5rem 0.75rem; cursor:pointer; font-size:0.8rem; border-bottom:1px solid var(--af-border); color:var(--af-text);" onmouseover="this.style.background='var(--af-surface-2)'" onmouseout="this.style.background=''">
+          <span style="font-weight:600;">${c.nombre_completo}</span>
+          <span style="color:var(--af-text-muted); margin-left:0.4rem;">${c.tipo_documento} ${c.numero_documento}</span>
+        </div>`;
+      }).join('');
+      clientResults.style.display = '';
+    } else clientResults.style.display = 'none';
+  } catch(e) { console.error(e); }
+}, 350));
+
+document.getElementById('btn-consultar-doc').addEventListener('click', async function () {
+  const num = clientSearch.value.trim();
+  if (!num) { showToast('Requerido', 'Ingresa un DNI o RUC.', 'warning'); return; }
+  btnLoading(this, '');
+  clientResults.style.display = 'none';
+  try {
+    const res = await afFetch(`/api/consultar-documento?numero=${encodeURIComponent(num)}`);
+    seleccionarCliente(res.cliente);
+  } catch(e) { showToast('No encontrado', e.message, 'warning'); }
+  finally { btnRestore(this); }
+});
+
+function seleccionarCliente(c) {
+  clienteActual = c;
+  // Determinar tipo SUNAT y bloquear el selector
+  const esRUC = c.tipo_documento === 'RUC';
+  setTipo(esRUC ? 'FACTURA' : 'BOLETA', true);
+
+  document.getElementById('client-search-area').style.display = 'none';
+  document.getElementById('client-selected').style.display = '';
+  document.getElementById('client-name').textContent = c.nombre_completo || c.razon_social || c.nombres || '';
+  document.getElementById('client-doc').textContent  = `${c.tipo_documento} ${c.numero_documento}`;
+  clientResults.style.display = 'none';
+}
+
+function limpiarCliente() {
+  clienteActual = null;
+  tipoLocked    = false;
+  setTipo('BOLETA', false);  // reset a default
+  document.getElementById('client-search-area').style.display = '';
+  document.getElementById('client-selected').style.display = 'none';
+  document.getElementById('client-search').value = '';
+  document.getElementById('client-search').placeholder = 'DNI, RUC o nombre...';
+}
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('#client-search') && !e.target.closest('#client-results'))
+    clientResults.style.display = 'none';
+});
+
+// ── Modal Variaciones ──
+let varProductoPadre   = null;   // { id, nombre }
+let varVariaciones     = [];     // lista de variaciones del servidor
+let varSelecciones     = {};     // { 'Talla': 'M', 'Color': 'Rojo', ... }
+let varMatchActual     = null;   // variacion que coincide con selecciones
+
+async function abrirModalVar(p) {
+  varProductoPadre  = p;
+  varVariaciones    = [];
+  varSelecciones    = {};
+  varMatchActual    = null;
+
+  document.getElementById('var-producto-nombre').textContent = p.nombre;
+  document.getElementById('var-attrs').innerHTML = '<div class="text-center py-3"><span class="spinner-border spinner-border-sm"></span> Cargando variaciones...</div>';
+  document.getElementById('btn-add-var').disabled = true;
+  document.getElementById('var-img').src    = p.imagen_url || '';
+  // Mostrar rango de precios reales de variaciones al abrir
+  const pMin = (p.precio_min || p.precio).toFixed(2);
+  const pMax = (p.precio_max || p.precio).toFixed(2);
+  document.getElementById('var-precio').textContent = pMin === pMax ? `S/ ${pMin}` : `S/ ${pMin} – ${pMax}`;
+  document.getElementById('var-sku').textContent      = 'SKU: ' + (p.sku || '—');
+  document.getElementById('var-summary').textContent  = 'Elige las opciones...';
+
+  const modal = new bootstrap.Modal(document.getElementById('modal-var'));
+  modal.show();
+
+  try {
+    const res = await afFetch(`/api/variaciones/${p.id}`);
+    varVariaciones = res.data || [];
+    renderAtributos();
+  } catch(e) {
+    document.getElementById('var-attrs').innerHTML = `<div class="text-danger">Error al cargar variaciones: ${e.message}</div>`;
+  }
+}
+
+function renderAtributos() {
+  if (!varVariaciones.length) {
+    document.getElementById('var-attrs').innerHTML = '<div class="text-muted">Sin variaciones disponibles</div>';
+    return;
+  }
+  // Extraer claves de atributos únicas
+  const keys = [...new Set(varVariaciones.flatMap(v => Object.keys(v.atributos || {})))];
+  let html = '';
+  keys.forEach(key => {
+    const vals = [...new Set(varVariaciones.map(v => v.atributos[key]).filter(Boolean))].sort();
+    html += `<div class="attr-group-title">${key}</div>
+      <div class="attr-chips">
+        ${vals.map(val => {
+          const sel = varSelecciones[key] === val ? 'selected' : '';
+          return `<div class="attr-chip ${sel}" onclick="selectAtributo('${key.replace(/'/g,"\\'")}','${val.replace(/'/g,"\\'")}')">${val}</div>`;
+        }).join('')}
+      </div>`;
+  });
+  document.getElementById('var-attrs').innerHTML = html;
+  actualizarPreviewVar();
+}
+
+function selectAtributo(key, val) {
+  varSelecciones[key] = val;
+  renderAtributos();
+}
+
+function actualizarPreviewVar() {
+  const keys    = [...new Set(varVariaciones.flatMap(v => Object.keys(v.atributos || {})))];
+  const todosOk = keys.every(k => varSelecciones[k]);
+
+  // Buscar variacion que coincida con las selecciones actuales
+  const match = varVariaciones.find(v =>
+    Object.entries(varSelecciones).every(([k, val]) => v.atributos[k] === val)
+  );
+
+  if (match && todosOk) {
+    varMatchActual = match;
+    document.getElementById('var-img').src                = match.imagen_url || varProductoPadre.imagen_url || '';
+    document.getElementById('var-precio').textContent     = `S/ ${parseFloat(match.precio).toFixed(2)}`;
+    document.getElementById('var-sku').textContent        = `SKU: ${match.sku || '—'}`;
+    const resumen = Object.entries(varSelecciones).map(([k, v]) => `${k}: ${v}`).join(' · ');
+    document.getElementById('var-summary').innerHTML      = `<span style="color:#198754;"><i class="bi bi-check-circle-fill"></i> ${resumen}</span>`;
+    document.getElementById('btn-add-var').disabled       = false;
+  } else {
+    varMatchActual = null;
+    document.getElementById('btn-add-var').disabled = true;
+    if (Object.keys(varSelecciones).length > 0) {
+      const parcial = Object.entries(varSelecciones).map(([k, v]) => `${k}: ${v}`).join(' · ');
+      document.getElementById('var-summary').textContent = `Seleccionando: ${parcial}...`;
+    } else {
+      document.getElementById('var-summary').textContent = 'Elige las opciones...';
+    }
+  }
+}
+
+function agregarVariacionSeleccionada() {
+  if (!varMatchActual) return;
+  const resumen  = Object.entries(varSelecciones).map(([k, v]) => `${k}: ${v}`).join(' · ');
+  const nombre   = `${varProductoPadre.nombre} (${resumen})`;
+  const cartKey  = `var-${varMatchActual.id}`;
+
+  const idx = cartItems.findIndex(i => i._cartKey === cartKey);
+  if (idx >= 0) {
+    cartItems[idx].cantidad += 1;
+  } else {
+    cartItems.push({
+      _cartKey: cartKey,
+      id: varProductoPadre.id,
+      nombre,
+      sku: varMatchActual.sku || varProductoPadre.sku || '',
+      precio_con_igv: parseFloat(varMatchActual.precio),
+      cantidad: 1,
+      tipo_afectacion_igv: '10',
+      variacion_id: varMatchActual.id,
+      atributos: { ...varSelecciones },
+    });
+  }
+
+  bootstrap.Modal.getInstance(document.getElementById('modal-var')).hide();
+  renderCarrito();
+  calcularTotales();
+}
+
+// ── Emitir ──
+async function emitirComprobante() {
+  if (!clienteActual) { showToast('Cliente requerido', 'Selecciona un cliente.', 'warning'); return; }
+  if (!cartItems.length) { showToast('Carrito vacío', 'Agrega al menos un producto.', 'warning'); return; }
+
+  const confirm = await Swal.fire({
+    title: `Emitir ${tipoComprobante} ${serieActual}`,
+    html: `<div style="text-align:left; font-size:0.9rem;">
+      <div><strong>Cliente:</strong> ${clienteActual.nombre_completo || ''}</div>
+      <div><strong>Doc:</strong> ${clienteActual.tipo_documento} ${clienteActual.numero_documento}</div>
+      <div style="font-size:1.1rem; font-weight:700; color:#0d6efd; margin-top:0.75rem;">Total: ${document.getElementById('t-total').textContent}</div>
+    </div>`,
+    icon: 'question', showCancelButton: true,
+    confirmButtonText: '<i class="bi bi-send"></i> Emitir',
+    cancelButtonText: 'Cancelar',
+    confirmButtonColor: '#0d6efd',
+    background: 'var(--af-surface)', color: 'var(--af-text)',
+  });
+  if (!confirm.isConfirmed) return;
+
+  const btn = document.getElementById('btn-emitir');
+  btnLoading(btn, 'Emitiendo...');
+  try {
+    const res = await afFetch('/ventas/nueva', {
+      method: 'POST',
+      body: {
+        cliente: clienteActual,
+        items: cartItems.map(i => ({
+          nombre: i.nombre, sku: i.sku,
+          cantidad: i.cantidad,
+          precio_con_igv: i.precio_con_igv,
+          tipo_afectacion_igv: i.tipo_afectacion_igv,
+          variacion_id: i.variacion_id || null,
+          atributos: i.atributos || null,
+        })),
+        costo_envio: parseFloat(document.getElementById('costo-envio').value) || 0,
+        numero_orden: document.getElementById('numero-orden').value.trim() || null,
+      }
+    });
+    if (res.success) {
+      showToast('Comprobante creado', `${res.numero} — ${res.estado}`, 'success');
+      cartItems = [];
+      limpiarCliente();
+      renderCarrito();
+      calcularTotales();
+      document.getElementById('costo-envio').value = '0';
+      document.getElementById('numero-orden').value = '';
+    } else { showToast('Error', res.message, 'danger'); }
+  } catch(e) { showToast('Error', e.message, 'danger'); }
+  finally { btnRestore(btn); }
+}
+</script>
+{% endblock %}

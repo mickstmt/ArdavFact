@@ -1,0 +1,302 @@
+{% extends 'base.html' %}
+{% block title %}Dashboard{% endblock %}
+
+{% block extra_css %}
+<style>
+  .stat-card {
+    background: var(--af-surface);
+    border: 1px solid var(--af-border);
+    border-radius: var(--af-radius);
+    padding: 1.25rem 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    box-shadow: var(--af-shadow);
+  }
+  .stat-icon {
+    width: 46px; height: 46px;
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.3rem; flex-shrink: 0;
+  }
+  .stat-value { font-size: 1.6rem; font-weight: 700; color: var(--af-text); line-height: 1; }
+  .stat-label { font-size: 0.75rem; color: var(--af-text-muted); margin-top: 0.15rem; }
+
+  .badge-tipo {
+    display: inline-block; padding: 0.2rem 0.55rem;
+    border-radius: 4px; font-size: 0.7rem; font-weight: 600; letter-spacing: 0.03em;
+  }
+  .estado-badge {
+    display: inline-block; padding: 0.15rem 0.5rem;
+    border-radius: 20px; font-size: 0.7rem; font-weight: 600;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+  <div>
+    <h4 class="fw-bold mb-0" style="color:var(--af-text);">Dashboard</h4>
+    <p class="mb-0" style="font-size:0.82rem; color:var(--af-text-muted);">{{ mes_nombre | title }}</p>
+  </div>
+  {% if current_user.tiene_permiso('ventas.crear') %}
+  <a href="{{ url_for('ventas.nueva_venta') }}" class="af-btn-primary">
+    <i class="bi bi-plus-lg"></i>Nueva Venta
+  </a>
+  {% endif %}
+</div>
+
+{# ── Fila de indicadores ── #}
+<div class="row g-3 mb-4">
+
+  {# Facturas #}
+  <div class="col-6 col-md-4 col-xl-2">
+    <div class="stat-card">
+      <div class="stat-icon" style="background:rgba(13,110,253,0.12); color:#0d6efd;">
+        <i class="bi bi-file-earmark-text"></i>
+      </div>
+      <div>
+        <div class="stat-value">{{ facturas_mes }}</div>
+        <div class="stat-label">Facturas</div>
+      </div>
+    </div>
+  </div>
+
+  {# Boletas #}
+  <div class="col-6 col-md-4 col-xl-2">
+    <div class="stat-card">
+      <div class="stat-icon" style="background:rgba(108,117,125,0.12); color:#6c757d;">
+        <i class="bi bi-receipt"></i>
+      </div>
+      <div>
+        <div class="stat-value">{{ boletas_mes }}</div>
+        <div class="stat-label">Boletas</div>
+      </div>
+    </div>
+  </div>
+
+  {# NC #}
+  <div class="col-6 col-md-4 col-xl-2">
+    <div class="stat-card">
+      <div class="stat-icon" style="background:rgba(253,126,20,0.12); color:#fd7e14;">
+        <i class="bi bi-arrow-return-left"></i>
+      </div>
+      <div>
+        <div class="stat-value">{{ nc_mes }}</div>
+        <div class="stat-label">N. Crédito</div>
+      </div>
+    </div>
+  </div>
+
+  {# Pendientes #}
+  <div class="col-6 col-md-4 col-xl-2">
+    <div class="stat-card">
+      <div class="stat-icon" style="background:rgba(255,193,7,0.12); color:#ffc107;">
+        <i class="bi bi-clock-history"></i>
+      </div>
+      <div>
+        <div class="stat-value">{{ pendientes }}</div>
+        <div class="stat-label">Pendientes</div>
+      </div>
+    </div>
+  </div>
+
+  {# Rechazados — resaltado si > 0 #}
+  <div class="col-6 col-md-4 col-xl-2">
+    <div class="stat-card {% if rechazados > 0 %}border-danger{% endif %}">
+      <div class="stat-icon" style="background:rgba(220,53,69,0.12); color:#dc3545;">
+        <i class="bi bi-x-circle"></i>
+      </div>
+      <div>
+        <div class="stat-value {% if rechazados > 0 %}text-danger{% endif %}">{{ rechazados }}</div>
+        <div class="stat-label">Rechazados</div>
+      </div>
+    </div>
+  </div>
+
+  {# IGV del mes #}
+  <div class="col-6 col-md-4 col-xl-2">
+    <div class="stat-card">
+      <div class="stat-icon" style="background:rgba(25,135,84,0.12); color:#198754;">
+        <i class="bi bi-percent"></i>
+      </div>
+      <div>
+        <div class="stat-value" style="font-size:1.1rem;">S/ {{ '{:,.2f}'.format(igv_mes) }}</div>
+        <div class="stat-label">IGV del Mes</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+{# ── Gráfico + Facturación ── #}
+<div class="row g-3 mb-4">
+  <div class="col-md-8">
+    <div class="af-card p-3 h-100">
+      <div class="d-flex align-items-center justify-content-between mb-3">
+        <span style="font-size:0.85rem; font-weight:600; color:var(--af-text);">
+          <i class="bi bi-bar-chart-line me-1" style="color:var(--af-primary);"></i>Facturación Semanal
+        </span>
+        <span style="font-size:0.75rem; color:var(--af-text-muted);">Últimas semanas</span>
+      </div>
+      {% if grafico_data %}
+      <canvas id="chart-semanal" height="90"></canvas>
+      {% else %}
+      <div class="text-center py-4" style="color:var(--af-text-muted); font-size:0.85rem;">
+        <i class="bi bi-bar-chart" style="font-size:2rem; opacity:0.3; display:block; margin-bottom:0.5rem;"></i>
+        Sin datos este mes
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="col-md-4">
+    <div class="af-card p-3 h-100 d-flex flex-column justify-content-center">
+      <div style="font-size:0.8rem; color:var(--af-text-muted); margin-bottom:0.25rem; text-transform:uppercase; letter-spacing:0.05em;">
+        Facturación del Mes
+      </div>
+      <div style="font-size:2rem; font-weight:700; color:var(--af-text); line-height:1.1;">
+        S/ {{ '{:,.2f}'.format(facturacion_mes) }}
+      </div>
+      <div style="font-size:0.78rem; color:var(--af-text-muted); margin-top:0.5rem;">
+        IGV incluido: <strong style="color:var(--af-text);">S/ {{ '{:,.2f}'.format(igv_mes) }}</strong>
+      </div>
+      <div style="font-size:0.78rem; color:var(--af-text-muted);">
+        Base imponible: <strong style="color:var(--af-text);">S/ {{ '{:,.2f}'.format(facturacion_mes - igv_mes) }}</strong>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# ── Últimos comprobantes ── #}
+<div class="af-card">
+  <div class="d-flex align-items-center justify-content-between p-3 border-bottom" style="border-color:var(--af-border) !important;">
+    <span style="font-size:0.85rem; font-weight:600; color:var(--af-text);">
+      <i class="bi bi-clock me-1" style="color:var(--af-primary);"></i>Últimos Comprobantes
+    </span>
+    {% if current_user.tiene_permiso('ventas.ver') %}
+    <a href="{{ url_for('ventas.lista_ventas') }}" style="font-size:0.8rem; color:var(--af-primary);">
+      Ver todos <i class="bi bi-arrow-right"></i>
+    </a>
+    {% endif %}
+  </div>
+
+  {% if ultimos %}
+  <div class="table-responsive">
+    <table class="table mb-0" style="font-size:0.82rem;">
+      <thead>
+        <tr style="color:var(--af-text-muted); background:var(--af-surface-2);">
+          <th class="ps-3 py-2 fw-600">Tipo</th>
+          <th class="py-2 fw-600">Número</th>
+          <th class="py-2 fw-600">Cliente</th>
+          <th class="py-2 fw-600 text-end">Total</th>
+          <th class="py-2 fw-600 text-end">IGV</th>
+          <th class="py-2 fw-600">Estado</th>
+          <th class="py-2 fw-600">Fecha</th>
+          <th class="pe-3 py-2 fw-600">Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in ultimos %}
+        <tr style="color:var(--af-text); border-color:var(--af-border);">
+          <td class="ps-3 py-2">
+            {% if c.tipo_comprobante == 'FACTURA' %}
+              <span class="badge-tipo" style="background:rgba(13,110,253,0.12); color:#0d6efd;">F</span>
+            {% elif c.tipo_comprobante == 'BOLETA' %}
+              <span class="badge-tipo" style="background:rgba(108,117,125,0.12); color:#6c757d;">B</span>
+            {% elif c.tipo_comprobante == 'NOTA_CREDITO' %}
+              <span class="badge-tipo" style="background:rgba(253,126,20,0.12); color:#fd7e14;">NC</span>
+            {% else %}
+              <span class="badge-tipo" style="background:rgba(220,53,69,0.12); color:#dc3545;">ND</span>
+            {% endif %}
+          </td>
+          <td class="py-2 fw-500">{{ c.numero_completo }}</td>
+          <td class="py-2" style="max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+            {{ c.cliente.nombre_completo if c.cliente else '—' }}
+          </td>
+          <td class="py-2 text-end fw-500">S/ {{ '{:,.2f}'.format(c.total) }}</td>
+          <td class="py-2 text-end" style="color:var(--af-text-muted);">S/ {{ '{:,.2f}'.format(c.total_igv) }}</td>
+          <td class="py-2">
+            {% set colores = {'BORRADOR':'#6c757d','PENDIENTE':'#fd7e14','ENVIADO':'#0dcaf0','ACEPTADO':'#198754','RECHAZADO':'#dc3545'} %}
+            <span class="estado-badge"
+                  style="background:{{ colores.get(c.estado,'#6c757d') }}20; color:{{ colores.get(c.estado,'#6c757d') }};">
+              {{ c.estado }}
+            </span>
+          </td>
+          <td class="py-2" style="color:var(--af-text-muted);">
+            {{ c.fecha_emision.strftime('%d/%m/%Y') }}
+          </td>
+          <td class="pe-3 py-2">
+            <a href="#" style="color:var(--af-primary); font-size:0.85rem;" title="Ver detalle">
+              <i class="bi bi-eye"></i>
+            </a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="text-center py-5" style="color:var(--af-text-muted);">
+    <i class="bi bi-inbox" style="font-size:2rem; opacity:0.3; display:block; margin-bottom:0.5rem;"></i>
+    <p class="mb-0" style="font-size:0.85rem;">Aún no hay comprobantes emitidos.</p>
+    {% if current_user.tiene_permiso('ventas.crear') %}
+    <a href="{{ url_for('ventas.nueva_venta') }}" class="af-btn-primary mt-3" style="display:inline-flex;">
+      <i class="bi bi-plus-lg"></i>Crear primer comprobante
+    </a>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+{% if grafico_data %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script>
+(function () {
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  const gridColor  = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
+  const textColor  = isDark ? '#868e96' : '#6c757d';
+
+  const ctx = document.getElementById('chart-semanal').getContext('2d');
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: {{ grafico_labels | tojson }},
+      datasets: [{
+        label: 'Facturación (S/)',
+        data: {{ grafico_data | tojson }},
+        backgroundColor: 'rgba(13,110,253,0.20)',
+        borderColor: 'rgba(13,110,253,0.80)',
+        borderWidth: 1.5,
+        borderRadius: 4,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => ' S/ ' + ctx.parsed.y.toLocaleString('es-PE', {minimumFractionDigits:2})
+          }
+        }
+      },
+      scales: {
+        x: { grid: { color: gridColor }, ticks: { color: textColor, font: { size: 11 } } },
+        y: {
+          grid: { color: gridColor },
+          ticks: {
+            color: textColor, font: { size: 11 },
+            callback: v => 'S/ ' + v.toLocaleString('es-PE')
+          }
+        }
+      }
+    }
+  });
+})();
+</script>
+{% endif %}
+{% endblock %}

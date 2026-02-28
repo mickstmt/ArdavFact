@@ -1,0 +1,175 @@
+{% extends 'base.html' %}
+{% block title %}Reporte de Ganancias{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+  <div>
+    <h4 class="mb-0 fw-semibold">Reporte de Ganancias</h4>
+    <p class="text-muted mb-0 small">Desglose IGV · {{ resumen.total_comprobantes }} comprobante(s) en el período</p>
+  </div>
+  <a href="{{ url_for('reportes.exportar_ganancias', fecha_ini=fecha_ini, fecha_fin=fecha_fin, tipo=tipo_filtro) }}"
+     class="btn btn-success btn-sm">
+    <i class="bi bi-file-earmark-excel-fill me-1"></i>Exportar Excel
+  </a>
+</div>
+
+<!-- Filtros -->
+<form method="GET" action="{{ url_for('reportes.ganancias') }}" class="af-card p-3 mb-4">
+  <div class="row g-2 align-items-end">
+    <div class="col-md-3">
+      <label class="form-label small mb-1">Fecha inicio</label>
+      <input type="date" name="fecha_ini" value="{{ fecha_ini }}" class="form-control form-control-sm">
+    </div>
+    <div class="col-md-3">
+      <label class="form-label small mb-1">Fecha fin</label>
+      <input type="date" name="fecha_fin" value="{{ fecha_fin }}" class="form-control form-control-sm">
+    </div>
+    <div class="col-md-3">
+      <label class="form-label small mb-1">Tipo</label>
+      <select name="tipo" class="form-select form-select-sm">
+        <option value="">Todos</option>
+        <option value="FACTURA" {{ 'selected' if tipo_filtro == 'FACTURA' }}>Facturas</option>
+        <option value="BOLETA"  {{ 'selected' if tipo_filtro == 'BOLETA'  }}>Boletas</option>
+      </select>
+    </div>
+    <div class="col-md-3 d-flex gap-2">
+      <button type="submit" class="btn btn-primary btn-sm flex-fill">
+        <i class="bi bi-search me-1"></i>Filtrar
+      </button>
+      <a href="{{ url_for('reportes.ganancias') }}" class="btn btn-outline-secondary btn-sm flex-fill">
+        <i class="bi bi-x-lg"></i>
+      </a>
+    </div>
+  </div>
+</form>
+
+<!-- 5 Cards resumen -->
+<div class="row g-3 mb-4">
+
+  <div class="col-6 col-lg">
+    <div class="af-card p-3 h-100">
+      <div class="small text-muted mb-1">Total Ingresos</div>
+      <div class="fs-5 fw-bold text-primary">S/ {{ '%.2f'|format(resumen.total_ingresos|float) }}</div>
+      <div class="small text-muted mt-1">con IGV</div>
+    </div>
+  </div>
+
+  <div class="col-6 col-lg">
+    <div class="af-card p-3 h-100">
+      <div class="small text-muted mb-1">IGV Cobrado</div>
+      <div class="fs-5 fw-bold text-warning">S/ {{ '%.2f'|format(resumen.total_igv|float) }}</div>
+      <div class="small text-muted mt-1">18% sobre base</div>
+    </div>
+  </div>
+
+  <div class="col-6 col-lg">
+    <div class="af-card p-3 h-100">
+      <div class="small text-muted mb-1">Costo Productos</div>
+      <div class="fs-5 fw-bold text-danger">S/ {{ '%.2f'|format(resumen.costo_productos|float) }}</div>
+      <div class="small text-muted mt-1">desde costos_productos</div>
+    </div>
+  </div>
+
+  <div class="col-6 col-lg">
+    <div class="af-card p-3 h-100">
+      <div class="small text-muted mb-1">Gasto Envío</div>
+      <div class="fs-5 fw-bold text-secondary">S/ {{ '%.2f'|format(resumen.gasto_envio|float) }}</div>
+      <div class="small text-muted mt-1">costo_envio acumulado</div>
+    </div>
+  </div>
+
+  <div class="col-6 col-lg">
+    <div class="af-card p-3 h-100 {% if resumen.ganancia_bruta >= 0 %}border-success{% else %}border-danger{% endif %}"
+         style="border-left: 4px solid;">
+      <div class="small text-muted mb-1">Ganancia Bruta</div>
+      <div class="fs-5 fw-bold {% if resumen.ganancia_bruta >= 0 %}text-success{% else %}text-danger{% endif %}">
+        S/ {{ '%.2f'|format(resumen.ganancia_bruta|float) }}
+      </div>
+      <div class="small text-muted mt-1">Margen {{ resumen.margen_pct }}%</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Tabla detalle -->
+<div class="af-card overflow-auto">
+  <table class="table table-sm align-middle mb-0">
+    <thead>
+      <tr>
+        <th>Comprobante</th>
+        <th>Tipo</th>
+        <th>Fecha</th>
+        <th>Cliente</th>
+        <th class="text-end">Base</th>
+        <th class="text-end">IGV</th>
+        <th class="text-end">Envío</th>
+        <th class="text-end">Total</th>
+        <th class="text-end">Costo Prod.</th>
+        <th class="text-end">Ganancia</th>
+        <th class="text-end">Margen</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for f in filas %}
+      <tr>
+        <td>
+          <a href="{{ url_for('ventas.detalle_venta', comp_id=f.id) }}"
+             class="fw-semibold text-decoration-none small">{{ f.numero_completo }}</a>
+        </td>
+        <td>
+          {% if f.tipo_comprobante == 'FACTURA' %}
+            <span class="badge bg-primary">Factura</span>
+          {% else %}
+            <span class="badge bg-secondary">Boleta</span>
+          {% endif %}
+        </td>
+        <td class="small">{{ f.fecha_emision }}</td>
+        <td class="small text-truncate" style="max-width:160px;" title="{{ f.cliente_nombre }}">
+          {{ f.cliente_nombre }}
+        </td>
+        <td class="text-end small">S/ {{ '%.2f'|format(f.base_imponible|float) }}</td>
+        <td class="text-end small text-warning">S/ {{ '%.2f'|format(f.total_igv|float) }}</td>
+        <td class="text-end small text-muted">S/ {{ '%.2f'|format(f.costo_envio|float) }}</td>
+        <td class="text-end fw-semibold">S/ {{ '%.2f'|format(f.total|float) }}</td>
+        <td class="text-end small text-danger">S/ {{ '%.2f'|format(f.costo_productos|float) }}</td>
+        <td class="text-end fw-semibold {% if f.ganancia_bruta >= 0 %}text-success{% else %}text-danger{% endif %}">
+          S/ {{ '%.2f'|format(f.ganancia_bruta|float) }}
+        </td>
+        <td class="text-end small">
+          <span class="badge {% if f.margen_pct >= 20 %}bg-success{% elif f.margen_pct >= 0 %}bg-warning text-dark{% else %}bg-danger{% endif %}">
+            {{ f.margen_pct }}%
+          </span>
+        </td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="11" class="text-center text-muted py-5">
+          <i class="bi bi-bar-chart" style="font-size:2rem;opacity:.3;display:block;"></i>
+          Sin comprobantes en el período seleccionado.
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<!-- Paginación -->
+{% if comprobantes.pages > 1 %}
+<nav class="mt-3 d-flex justify-content-center">
+  <ul class="pagination pagination-sm">
+    {% for p in comprobantes.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+      {% if p %}
+        <li class="page-item {{ 'active' if p == comprobantes.page }}">
+          <a class="page-link"
+             href="{{ url_for('reportes.ganancias', page=p, fecha_ini=fecha_ini, fecha_fin=fecha_fin, tipo=tipo_filtro) }}">
+            {{ p }}
+          </a>
+        </li>
+      {% else %}
+        <li class="page-item disabled"><span class="page-link">…</span></li>
+      {% endif %}
+    {% endfor %}
+  </ul>
+</nav>
+{% endif %}
+{% endblock %}

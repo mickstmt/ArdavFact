@@ -1,0 +1,200 @@
+{% extends 'base.html' %}
+{% block title %}Nota de Débito — {{ comp_ref.numero_completo }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .nd-ref-card { background: var(--af-surface-2); border: 1px solid rgba(220,53,69,0.25); border-radius: var(--af-radius); padding: 1rem 1.25rem; margin-bottom: 1.25rem; }
+  .nd-ref-label { font-size: 0.72rem; color: var(--af-text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+  .nd-ref-value { font-size: 0.88rem; color: var(--af-text); font-weight: 500; }
+  .nd-total-box { background: var(--af-surface-2); border-radius: var(--af-radius); padding: 0.85rem 1rem; font-size: 0.85rem; }
+  .nd-total-row { display: flex; justify-content: space-between; color: var(--af-text-muted); padding: 0.15rem 0; }
+  .nd-total-row.grand { font-weight: 700; color: var(--af-text); font-size: 1rem; border-top: 1px solid var(--af-border); margin-top: 0.4rem; padding-top: 0.4rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center gap-2 mb-3">
+  <a href="{{ url_for('ventas.detalle_venta', comp_id=comp_ref.id) }}" style="color:var(--af-text-muted); text-decoration:none;">
+    <i class="bi bi-chevron-left"></i>
+  </a>
+  <h4 class="fw-bold mb-0" style="color:var(--af-text);">Nueva Nota de Débito</h4>
+</div>
+
+{# Referencia #}
+<div class="nd-ref-card">
+  <div class="d-flex align-items-center gap-2 mb-2" style="color:#e05c6d;">
+    <i class="bi bi-receipt"></i>
+    <strong style="font-size:0.82rem;">Comprobante de referencia</strong>
+  </div>
+  <div class="row g-2">
+    <div class="col-6 col-md-3">
+      <div class="nd-ref-label">Número</div>
+      <div class="nd-ref-value">{{ comp_ref.numero_completo }}</div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="nd-ref-label">Tipo</div>
+      <div class="nd-ref-value">{{ comp_ref.tipo_comprobante }}</div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="nd-ref-label">Fecha</div>
+      <div class="nd-ref-value">{{ comp_ref.fecha_emision.strftime('%d/%m/%Y') }}</div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="nd-ref-label">Total original</div>
+      <div class="nd-ref-value fw-bold" style="color:var(--af-primary);">S/ {{ '%.2f'|format(comp_ref.total) }}</div>
+    </div>
+    <div class="col-12">
+      <div class="nd-ref-label">Cliente</div>
+      <div class="nd-ref-value">{{ comp_ref.cliente.nombre_completo }} — {{ comp_ref.cliente.tipo_documento }} {{ comp_ref.cliente.numero_documento }}</div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3">
+  <div class="col-12 col-lg-7">
+
+    <div class="af-card p-4">
+      <h6 class="fw-semibold mb-3" style="color:var(--af-text);">Datos de la Nota de Débito</h6>
+
+      <div class="mb-3">
+        <label class="form-label" style="font-size:0.82rem; color:var(--af-text-muted);">Motivo (Catálogo 10 SUNAT) *</label>
+        <select id="motivo-select" class="form-select form-select-sm" style="background:var(--af-surface-2); border-color:var(--af-border); color:var(--af-text);">
+          {% for codigo, descripcion in motivos.items() %}
+          <option value="{{ codigo }}">{{ codigo }} — {{ descripcion }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label" style="font-size:0.82rem; color:var(--af-text-muted);">Descripción del cargo *</label>
+        <input type="text" id="descripcion" class="form-control form-control-sm"
+          placeholder="Ej: Interés por pago tardío — Orden #1234"
+          style="background:var(--af-surface-2); border-color:var(--af-border); color:var(--af-text);">
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label" style="font-size:0.82rem; color:var(--af-text-muted);">Monto adicional (con IGV) *</label>
+        <div class="input-group input-group-sm">
+          <span class="input-group-text" style="background:var(--af-surface-2); border-color:var(--af-border); color:var(--af-text-muted);">S/</span>
+          <input type="number" id="monto" step="0.01" min="0.01" value="" class="form-control"
+            placeholder="0.00"
+            style="background:var(--af-surface-2); border-color:var(--af-border); color:var(--af-text);"
+            oninput="actualizarPreview()">
+        </div>
+        <div style="font-size:0.72rem; color:var(--af-text-muted); margin-top:0.25rem;">
+          Precio que paga el cliente (incluye IGV 18%)
+        </div>
+      </div>
+
+      {# Preview IGV en tiempo real #}
+      <div id="preview-igv" style="display:none;" class="nd-total-box mb-3">
+        <div class="nd-total-row">
+          <span>Base imponible (sin IGV)</span><span id="prev-base">S/ 0.00</span>
+        </div>
+        <div class="nd-total-row">
+          <span>I.G.V. 18%</span><span id="prev-igv">S/ 0.00</span>
+        </div>
+        <div class="nd-total-row grand">
+          <span>TOTAL ND</span><span id="prev-total">S/ 0.00</span>
+        </div>
+      </div>
+
+      <div class="d-flex gap-2 mt-3">
+        <button id="btn-emitir-nd" onclick="emitirND()" class="btn btn-danger">
+          <i class="bi bi-receipt me-1"></i>Emitir Nota de Débito
+        </button>
+        <a href="{{ url_for('ventas.detalle_venta', comp_id=comp_ref.id) }}" class="btn btn-outline-secondary">
+          Cancelar
+        </a>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="col-12 col-lg-5">
+    <div class="af-card p-4">
+      <div style="font-size:0.82rem; color:var(--af-text-muted); margin-bottom:0.75rem;">
+        <i class="bi bi-info-circle me-1"></i>
+        La Nota de Débito aplica un cargo adicional al comprobante de referencia.
+        Se generará un ítem único con el monto indicado.
+      </div>
+      <div class="nd-total-box">
+        <div class="nd-total-row">
+          <span>Comprobante ref.</span><span>{{ comp_ref.numero_completo }}</span>
+        </div>
+        <div class="nd-total-row">
+          <span>Total original</span><span>S/ {{ '%.2f'|format(comp_ref.total) }}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const COMP_REF_ID = {{ comp_ref.id }};
+
+function actualizarPreview() {
+  const monto = parseFloat(document.getElementById('monto').value) || 0;
+  if (monto <= 0) {
+    document.getElementById('preview-igv').style.display = 'none';
+    return;
+  }
+  const base = monto / 1.18;
+  const igv  = monto - base;
+  document.getElementById('prev-base').textContent  = 'S/ ' + base.toFixed(2);
+  document.getElementById('prev-igv').textContent   = 'S/ ' + igv.toFixed(2);
+  document.getElementById('prev-total').textContent = 'S/ ' + monto.toFixed(2);
+  document.getElementById('preview-igv').style.display = '';
+}
+
+async function emitirND() {
+  const motivoCodigo  = document.getElementById('motivo-select').value;
+  const descripcion   = document.getElementById('descripcion').value.trim();
+  const monto         = parseFloat(document.getElementById('monto').value) || 0;
+
+  if (!descripcion) { showToast('Requerido', 'Ingresa la descripción del cargo.', 'warning'); return; }
+  if (monto <= 0)   { showToast('Requerido', 'Ingresa un monto mayor a 0.', 'warning'); return; }
+
+  const confirm = await Swal.fire({
+    title: 'Emitir Nota de Débito',
+    html: `<div style="text-align:left; font-size:0.88rem;">
+      <div><b>Referencia:</b> {{ comp_ref.numero_completo }}</div>
+      <div><b>Descripción:</b> ${descripcion}</div>
+      <div style="font-size:1rem; font-weight:700; color:#e05c6d; margin-top:0.5rem;">
+        Cargo: S/ ${monto.toFixed(2)}
+      </div>
+    </div>`,
+    icon: 'warning', showCancelButton: true,
+    confirmButtonText: '<i class="bi bi-receipt"></i> Emitir ND',
+    confirmButtonColor: '#dc3545',
+    cancelButtonText: 'Cancelar',
+    background: 'var(--af-surface)', color: 'var(--af-text)',
+  });
+  if (!confirm.isConfirmed) return;
+
+  const btn = document.getElementById('btn-emitir-nd');
+  btnLoading(btn, 'Emitiendo...');
+  try {
+    const res = await afFetch('/notas/nd/crear', {
+      method: 'POST',
+      body: {
+        comp_ref_id: COMP_REF_ID,
+        motivo_codigo: motivoCodigo,
+        motivo_descripcion: '',
+        monto_adicional: monto,
+        descripcion,
+      },
+    });
+    if (res.success) {
+      showToast('ND emitida', `${res.numero} — ${res.estado}`, 'success');
+      setTimeout(() => window.location.href = `/ventas/${res.comprobante_id}`, 1500);
+    } else {
+      showToast('Error', res.message, 'danger');
+    }
+  } catch(e) { showToast('Error', e.message, 'danger'); }
+  finally { btnRestore(btn); }
+}
+</script>
+{% endblock %}
