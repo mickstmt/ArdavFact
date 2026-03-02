@@ -120,7 +120,7 @@ def _register_security_headers(app: Flask) -> None:
             "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
             "font-src 'self' https://cdn.jsdelivr.net; "
             "img-src 'self' data: https:; "
-            "connect-src 'self'; "
+            "connect-src 'self' https://cdn.jsdelivr.net; "
             "frame-ancestors 'self';"
         )
         # HSTS solo en producción (no en dev/test para evitar problemas con HTTP local)

@@ -167,7 +167,7 @@
 {% endblock %}
 
 
-{% block scripts %}
+{% block extra_js %}
 <script>
 const URL_SYNC        = '{{ url_for("productos.sync_woocommerce") }}';
 const URL_SYNC_STATUS = '{{ url_for("productos.sync_status") }}';
@@ -285,4 +285,4 @@ mostrarPanel();
 arrancarPolling();
 {% endif %}
 </script>
-{% endblock %}
+{% endblock extra_js %}
