@@ -176,12 +176,16 @@ let _pollInterval = null;
 
 // ── Arrancar sincronización ──────────────────────────────────────────────────
 async function iniciarSync() {
+  // Mostrar panel ANTES del await para dar feedback visual inmediato
+  mostrarPanel();
+
   try {
     const data = await afFetch(URL_SYNC, { method: 'POST' });
 
     if (!data.success) {
-      // Ya hay sync en curso o WooCommerce no está configurado
+      ocultarPanel();
       showToast('Aviso', data.message, 'warning');
+      // Si ya hay un sync en curso, reconectar el polling
       if (data.message.includes('curso')) {
         mostrarPanel();
         arrancarPolling();
@@ -189,11 +193,11 @@ async function iniciarSync() {
       return;
     }
 
-    // Sync iniciado → mostrar panel y comenzar polling
-    mostrarPanel();
+    // Sync iniciado correctamente → comenzar polling
     arrancarPolling();
 
   } catch (e) {
+    ocultarPanel();
     showToast('Error', 'No se pudo iniciar la sincronización.', 'danger');
   }
 }

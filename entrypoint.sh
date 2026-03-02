@@ -12,6 +12,5 @@ exec gunicorn \
     --bind 0.0.0.0:80 \
     --workers 1 \
     --timeout 600 \
-    --access-logfile - \
     --error-logfile - \
     wsgi:app
