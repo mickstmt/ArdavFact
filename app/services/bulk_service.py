@@ -80,16 +80,20 @@ def analizar_excel(file_path: str, config: dict) -> list[dict]:
             'precio_str':  _val(row, _COL_PRECIO) or '0',
         })
 
+    # Cache de clientes por número de documento: evita llamadas repetidas a ApisPeru
+    # cuando el mismo cliente aparece en múltiples órdenes.
+    cache_clientes: dict = {}
+
     resultados = []
     for numero_orden, orden in ordenes.items():
-        resultado = _analizar_orden(orden, config)
+        resultado = _analizar_orden(orden, config, cache_clientes)
         resultados.append(resultado)
 
     resultados.sort(key=lambda r: r['numero_orden'])
     return resultados
 
 
-def _analizar_orden(orden: dict, config: dict) -> dict:
+def _analizar_orden(orden: dict, config: dict, cache_clientes: dict | None = None) -> dict:
     """Valida una orden y retorna su resumen de análisis."""
     errores = list(orden['errores'])
     advertencias = list(orden['advertencias'])
@@ -107,7 +111,14 @@ def _analizar_orden(orden: dict, config: dict) -> dict:
     if not numero_doc:
         errores.append('Sin número de documento.')
     else:
-        resultado_cli = buscar_o_crear_cliente(numero_doc)
+        # Usar cache para evitar múltiples llamadas a ApisPeru por el mismo documento
+        if cache_clientes is not None and numero_doc in cache_clientes:
+            resultado_cli = cache_clientes[numero_doc]
+        else:
+            resultado_cli = buscar_o_crear_cliente(numero_doc)
+            if cache_clientes is not None:
+                cache_clientes[numero_doc] = resultado_cli
+
         if resultado_cli['encontrado']:
             cli = resultado_cli['cliente']
             cliente_info = cli
