@@ -8,8 +8,7 @@ Formato esperado:
 Columnas Excel (0-indexed):
   A(0)=PedidoId/N°Orden | C(2)=Fecha | F(5)=DNI/Doc | G(6)=Nombre cliente
   H(7)=Descripción | I(8)=SKU | J(9)=Cantidad
-  K(10)=Precio venta SIN IGV (base) | L(11)=IGV del ítem
-  → precio con IGV = K + L
+  K(10)=Venta Total Pedido PEN = precio de venta CON IGV incluido
   S(18)=Costo Envío (con IGV)
 """
 import logging
@@ -37,8 +36,7 @@ _COL_NOMBRE     = 6   # G - Nombre del cliente
 _COL_DESC       = 7   # H - Descripción del producto
 _COL_SKU        = 8   # I - SKU
 _COL_CANTIDAD   = 9   # J - Cantidad de unidades
-_COL_PRECIO_BASE = 10  # K - Precio de venta SIN IGV (base)
-_COL_IGV_ITEM   = 11  # L - IGV del ítem (K * 0.18)
+_COL_PRECIO     = 10  # K - Venta Total Pedido PEN (precio con IGV incluido)
 _COL_ENVIO      = 18  # S - Costo de envío (con IGV)
 
 _IGV_FACTOR = Decimal('1.18')
@@ -85,21 +83,10 @@ def analizar_excel(file_path: str, config: dict) -> list[dict]:
                 if envio_fila and envio_fila != '0':
                     ordenes[numero_orden]['costo_envio_str'] = envio_fila
 
-        # Precio con IGV = base (K) + IGV (L)
-        _base = _val(row, _COL_PRECIO_BASE)
-        _igv  = _val(row, _COL_IGV_ITEM)
-        try:
-            _precio_con_igv = str(
-                Decimal(_base.replace(',', '.') or '0') +
-                Decimal(_igv.replace(',', '.') or '0')
-            )
-        except InvalidOperation:
-            _precio_con_igv = _base or '0'
-
         ordenes[numero_orden]['items_raw'].append({
             'sku':          _val(row, _COL_SKU),
             'descripcion':  _val(row, _COL_DESC) or _val(row, _COL_NOMBRE),
-            'precio_str':   _precio_con_igv,
+            'precio_str':   _val(row, _COL_PRECIO) or '0',
             'cantidad_str': _val(row, _COL_CANTIDAD) or '1',
         })
 
