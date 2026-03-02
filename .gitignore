@@ -14,9 +14,9 @@ certificados/*.p12
 certificados/*.pem
 certificados/*.cer
 
-# === Archivos generados por SUNAT ===
-comprobantes/
-uploads/
+# === Archivos generados por SUNAT (solo la carpeta raíz, NO app/blueprints/comprobantes) ===
+/comprobantes/
+/uploads/
 
 # === Python ===
 __pycache__/

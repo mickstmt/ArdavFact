@@ -1,0 +1,209 @@
+{% extends 'base.html' %}
+{% block title %}Importar CDRs / XMLs{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h4 class="mb-0 fw-semibold">Importar CDRs / XMLs</h4>
+        <p class="text-muted mb-0 small">Sube archivos CDR o XML descargados externamente para asociarlos a sus
+            comprobantes.</p>
+    </div>
+    <a href="{{ url_for('ventas.lista_ventas') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left me-1"></i>Volver a Comprobantes
+    </a>
+</div>
+
+<div class="row g-4">
+
+    {# ── Panel de subida ── #}
+    <div class="col-lg-6">
+        <div class="af-card p-4 h-100">
+            <h6 class="fw-semibold mb-3"><i class="bi bi-cloud-arrow-up me-2 text-primary"></i>Subir archivos</h6>
+
+            <div class="alert alert-info d-flex gap-2 align-items-start mb-4" style="font-size:0.83rem;">
+                <i class="bi bi-info-circle-fill mt-1 flex-shrink-0"></i>
+                <div>
+                    <strong>Formatos aceptados:</strong> <code>.xml</code> (CDR o XML firmado)<br>
+                    Los CDR deben llevar el prefijo <code>R-</code> en el nombre de archivo.<br>
+                    Ejemplo: <code>R-20605555790-01-F001-00000001.xml</code>
+                </div>
+            </div>
+
+            {# Drop zone #}
+            <div id="dropZone" class="rounded-3 border border-2 border-dashed text-center py-5 px-3 mb-4"
+                style="border-color: var(--af-border) !important; cursor: pointer; transition: border-color .2s, background .2s;"
+                onclick="document.getElementById('archivoInput').click()">
+                <i class="bi bi-file-earmark-arrow-up-fill"
+                    style="font-size: 2.5rem; color: var(--af-primary); opacity:.7;"></i>
+                <p class="mt-2 mb-1 fw-semibold">Arrastra tus archivos aquí</p>
+                <p class="text-muted small mb-3">o haz clic para seleccionar</p>
+                <span class="badge bg-secondary">XML / CDR</span>
+                <input type="file" id="archivoInput" accept=".xml" multiple class="d-none">
+            </div>
+
+            {# Lista de archivos seleccionados #}
+            <div id="listaArchivos" class="mb-3 d-none">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <small class="fw-semibold text-muted">ARCHIVOS SELECCIONADOS</small>
+                    <button class="btn btn-sm btn-link text-danger p-0" onclick="limpiarArchivos()">
+                        <i class="bi bi-x-lg"></i> Limpiar
+                    </button>
+                </div>
+                <ul id="ulArchivos" class="list-group list-group-flush" style="max-height:200px; overflow-y:auto;"></ul>
+            </div>
+
+            <div class="d-grid">
+                <button id="btnImportar" class="btn btn-primary" onclick="importarArchivos()" disabled>
+                    <i class="bi bi-upload me-2"></i>Importar archivos
+                </button>
+            </div>
+        </div>
+    </div>
+
+    {# ── Panel de resultados ── #}
+    <div class="col-lg-6">
+        <div class="af-card p-4 h-100">
+            <h6 class="fw-semibold mb-3"><i class="bi bi-list-check me-2 text-success"></i>Resultados</h6>
+
+            <div id="estadoInicial" class="text-center text-muted py-5">
+                <i class="bi bi-inbox" style="font-size: 2rem; opacity:.4;"></i>
+                <p class="mt-2 small">Los resultados aparecerán aquí después de importar.</p>
+            </div>
+
+            <div id="spinner" class="text-center py-5 d-none">
+                <div class="spinner-border text-primary"></div>
+                <p class="mt-3 text-muted small">Importando archivos…</p>
+            </div>
+
+            <div id="resultados" class="d-none">
+                <div id="resumenImport" class="mb-3"></div>
+                <ul id="ulResultados" class="list-group" style="max-height:350px; overflow-y:auto;"></ul>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+
+{% block extra_js %}
+<script>
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('archivoInput');
+    const btnImport = document.getElementById('btnImportar');
+    const listaBox = document.getElementById('listaArchivos');
+    const ulArchivos = document.getElementById('ulArchivos');
+    let archivosSeleccionados = [];
+
+    // ── Drag & drop ──
+    dropZone.addEventListener('dragover', e => {
+        e.preventDefault();
+        dropZone.style.borderColor = 'var(--af-primary)';
+        dropZone.style.background = 'var(--af-hover)';
+    });
+    dropZone.addEventListener('dragleave', () => {
+        dropZone.style.borderColor = '';
+        dropZone.style.background = '';
+    });
+    dropZone.addEventListener('drop', e => {
+        e.preventDefault();
+        dropZone.style.borderColor = '';
+        dropZone.style.background = '';
+        agregarArchivos(Array.from(e.dataTransfer.files));
+    });
+    fileInput.addEventListener('change', () => {
+        agregarArchivos(Array.from(fileInput.files));
+    });
+
+    function agregarArchivos(nuevos) {
+        const validos = nuevos.filter(f => f.name.toLowerCase().endsWith('.xml'));
+        if (validos.length < nuevos.length) {
+            showToast('warning', 'Solo se aceptan archivos .xml');
+        }
+        // Evitar duplicados por nombre
+        const existentes = new Set(archivosSeleccionados.map(f => f.name));
+        validos.forEach(f => { if (!existentes.has(f.name)) archivosSeleccionados.push(f); });
+        renderListaArchivos();
+    }
+
+    function renderListaArchivos() {
+        ulArchivos.innerHTML = archivosSeleccionados.map((f, i) => {
+            const esCdr = f.name.startsWith('R-');
+            const badge = esCdr
+                ? '<span class="badge bg-warning text-dark ms-2">CDR</span>'
+                : '<span class="badge bg-info text-dark ms-2">XML</span>';
+            return `<li class="list-group-item d-flex align-items-center justify-content-between py-2 px-2" style="font-size:.83rem;">
+      <span><i class="bi bi-file-earmark-code me-2 text-muted"></i>${f.name}${badge}</span>
+      <button class="btn btn-sm btn-link text-danger p-0" onclick="quitarArchivo(${i})"><i class="bi bi-x"></i></button>
+    </li>`;
+        }).join('');
+        listaBox.classList.toggle('d-none', archivosSeleccionados.length === 0);
+        btnImport.disabled = archivosSeleccionados.length === 0;
+    }
+
+    function quitarArchivo(idx) {
+        archivosSeleccionados.splice(idx, 1);
+        renderListaArchivos();
+    }
+
+    function limpiarArchivos() {
+        archivosSeleccionados = [];
+        fileInput.value = '';
+        renderListaArchivos();
+    }
+
+    async function importarArchivos() {
+        if (!archivosSeleccionados.length) return;
+
+        document.getElementById('estadoInicial').classList.add('d-none');
+        document.getElementById('resultados').classList.add('d-none');
+        document.getElementById('spinner').classList.remove('d-none');
+        btnImport.disabled = true;
+
+        const fd = new FormData();
+        archivosSeleccionados.forEach(f => fd.append('archivos', f));
+        fd.append('csrf_token', document.querySelector('meta[name="csrf-token"]').content);
+
+        try {
+            const resp = await fetch('{{ url_for("comprobantes.importar_archivos") }}', {
+                method: 'POST',
+                body: fd,
+            });
+            const data = await resp.json();
+
+            document.getElementById('spinner').classList.add('d-none');
+            document.getElementById('resultados').classList.remove('d-none');
+
+            mostrarResultados(data);
+            if (data.success) limpiarArchivos();
+
+        } catch (e) {
+            document.getElementById('spinner').classList.add('d-none');
+            document.getElementById('estadoInicial').classList.remove('d-none');
+            showToast('error', 'Error de red. Intente nuevamente.');
+        } finally {
+            btnImport.disabled = false;
+        }
+    }
+
+    function mostrarResultados(data) {
+        const ok = (data.resultados || []).filter(r => r.success).length;
+        const errors = (data.resultados || []).filter(r => !r.success).length;
+
+        document.getElementById('resumenImport').innerHTML = `
+    <div class="alert ${errors > 0 ? 'alert-warning' : 'alert-success'} py-2 mb-3" style="font-size:.85rem;">
+      <i class="bi bi-${errors > 0 ? 'exclamation-triangle' : 'check-circle'}-fill me-2"></i>
+      <strong>${ok}</strong> importado(s) correctamente, <strong>${errors}</strong> con error.
+    </div>`;
+
+        document.getElementById('ulResultados').innerHTML = (data.resultados || []).map(r => `
+    <li class="list-group-item d-flex align-items-start gap-2 py-2 ${r.success ? '' : 'list-group-item-danger'}" style="font-size:.82rem;">
+      <i class="bi bi-${r.success ? 'check-circle-fill text-success' : 'x-circle-fill text-danger'} mt-1 flex-shrink-0"></i>
+      <div>
+        <div class="fw-semibold">${r.filename}</div>
+        <div class="text-muted">${r.message}</div>
+      </div>
+    </li>`).join('');
+    }
+</script>
+{% endblock %}
