@@ -7,7 +7,10 @@ Formato esperado:
 
 Columnas Excel (0-indexed):
   A(0)=PedidoId/N°Orden | C(2)=Fecha | F(5)=DNI/Doc | G(6)=Nombre cliente
-  H(7)=Descripción | I(8)=SKU | K(10)=Precio venta | L(11)=IGV | S(18)=Costo Envío
+  H(7)=Descripción | I(8)=SKU
+  K(10)=Precio venta SIN IGV (base) | L(11)=IGV del ítem
+  → precio con IGV = K + L
+  S(18)=Costo Envío (con IGV)
 """
 import logging
 from datetime import datetime
@@ -33,8 +36,9 @@ _COL_DOC        = 5   # F - DNI / Doc. extranjería
 _COL_NOMBRE     = 6   # G - Nombre del cliente
 _COL_DESC       = 7   # H - Descripción del producto
 _COL_SKU        = 8   # I - SKU
-_COL_PRECIO     = 10  # K - Precio de venta (con IGV)
-_COL_ENVIO      = 18  # S - Costo de envío
+_COL_PRECIO_BASE = 10  # K - Precio de venta SIN IGV (base)
+_COL_IGV_ITEM   = 11  # L - IGV del ítem (K * 0.18)
+_COL_ENVIO      = 18  # S - Costo de envío (con IGV)
 
 _IGV_FACTOR = Decimal('1.18')
 
@@ -74,10 +78,21 @@ def analizar_excel(file_path: str, config: dict) -> list[dict]:
                 'advertencias': [],
             }
 
+        # Precio con IGV = base (K) + IGV (L)
+        _base = _val(row, _COL_PRECIO_BASE)
+        _igv  = _val(row, _COL_IGV_ITEM)
+        try:
+            _precio_con_igv = str(
+                Decimal(_base.replace(',', '.') or '0') +
+                Decimal(_igv.replace(',', '.') or '0')
+            )
+        except InvalidOperation:
+            _precio_con_igv = _base or '0'
+
         ordenes[numero_orden]['items_raw'].append({
             'sku':         _val(row, _COL_SKU),
             'descripcion': _val(row, _COL_DESC) or _val(row, _COL_NOMBRE),
-            'precio_str':  _val(row, _COL_PRECIO) or '0',
+            'precio_str':  _precio_con_igv,
         })
 
     # Cache de clientes por número de documento: evita llamadas repetidas a ApisPeru
