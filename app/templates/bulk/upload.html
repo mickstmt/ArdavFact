@@ -18,11 +18,14 @@
       <div class="alert alert-info d-flex gap-2 align-items-start mb-4" style="font-size:0.83rem;">
         <i class="bi bi-info-circle-fill mt-1 flex-shrink-0"></i>
         <div>
-          <strong>Columnas requeridas en el Excel:</strong>
-          <span class="ms-1 text-muted">
-            B=SKU &nbsp;|&nbsp; D=Fecha &nbsp;|&nbsp; E=N°Orden &nbsp;|&nbsp; J=Nombre &nbsp;|&nbsp;
-            L=DNI/RUC &nbsp;|&nbsp; AJ=Precio &nbsp;|&nbsp; AK=Descripción &nbsp;|&nbsp; AL=Costo Envío
-          </span>
+          <strong>Formato esperado:</strong> cabeceras en fila 4, datos desde fila 5.
+          <div class="mt-1 text-muted">
+            A=PedidoId &nbsp;|&nbsp; C=Fecha &nbsp;|&nbsp; F=DNI/Doc &nbsp;|&nbsp; G=Nombre cliente
+            &nbsp;|&nbsp; H=Descripción &nbsp;|&nbsp; I=SKU &nbsp;|&nbsp; K=Precio &nbsp;|&nbsp; S=Costo Envío
+          </div>
+          <div class="mt-1 text-muted" style="font-size:0.78rem;">
+            <i class="bi bi-diagram-2"></i> Las filas se agrupan por <strong>PedidoId (col. A)</strong> — una orden puede tener múltiples ítems.
+          </div>
         </div>
       </div>
 

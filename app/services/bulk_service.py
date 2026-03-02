@@ -1,8 +1,13 @@
-"""Servicio de carga masiva desde Excel de WooCommerce.
+"""Servicio de carga masiva desde Excel.
+
+Formato esperado:
+  - Cabeceras en fila 4 (header=3 en pandas)
+  - Datos desde fila 5 en adelante
+  - Agrupación por PedidoId (columna A)
 
 Columnas Excel (0-indexed):
-  B(1)=SKU | D(3)=Fecha | E(4)=N°Orden | J(9)=Nombre | L(11)=DNI/RUC
-  AJ(35)=Precio | AK(36)=Descripción | AL(37)=Costo Envío
+  A(0)=PedidoId/N°Orden | C(2)=Fecha | F(5)=DNI/Doc | G(6)=Nombre cliente
+  H(7)=Descripción | I(8)=SKU | K(10)=Precio venta | L(11)=IGV | S(18)=Costo Envío
 """
 import logging
 from datetime import datetime
@@ -21,15 +26,15 @@ from app.services.cliente_service import buscar_o_crear_cliente
 
 logger = logging.getLogger(__name__)
 
-# Índices de columna (0-based)
-_COL_SKU        = 1
-_COL_FECHA      = 3
-_COL_ORDEN      = 4
-_COL_NOMBRE     = 9
-_COL_DOC        = 11
-_COL_PRECIO     = 35
-_COL_DESC       = 36
-_COL_ENVIO      = 37
+# Índices de columna (0-based) — cabeceras en fila 4, datos desde fila 5
+_COL_ORDEN      = 0   # A - PedidoId (clave de agrupación y N° orden)
+_COL_FECHA      = 2   # C - Fecha del pedido
+_COL_DOC        = 5   # F - DNI / Doc. extranjería
+_COL_NOMBRE     = 6   # G - Nombre del cliente
+_COL_DESC       = 7   # H - Descripción del producto
+_COL_SKU        = 8   # I - SKU
+_COL_PRECIO     = 10  # K - Precio de venta (con IGV)
+_COL_ENVIO      = 18  # S - Costo de envío
 
 _IGV_FACTOR = Decimal('1.18')
 
@@ -44,7 +49,7 @@ def analizar_excel(file_path: str, config: dict) -> list[dict]:
     Retorna lista de dicts con status='OK'|'WARNING'|'ERROR'.
     """
     try:
-        df = pd.read_excel(file_path, header=0, dtype=str)
+        df = pd.read_excel(file_path, header=3, dtype=str)
     except Exception as exc:
         logger.error('[BULK] Error leyendo Excel: %s', exc)
         raise ValueError(f'No se pudo leer el archivo Excel: {exc}')
