@@ -77,6 +77,12 @@ def analizar_excel(file_path: str, config: dict) -> list[dict]:
                 'errores': [],
                 'advertencias': [],
             }
+        else:
+            # El envío puede aparecer en cualquier fila del grupo: tomar el primer valor no-cero
+            if ordenes[numero_orden]['costo_envio_str'] in ('', '0'):
+                envio_fila = _val(row, _COL_ENVIO)
+                if envio_fila and envio_fila != '0':
+                    ordenes[numero_orden]['costo_envio_str'] = envio_fila
 
         # Precio con IGV = base (K) + IGV (L)
         _base = _val(row, _COL_PRECIO_BASE)
