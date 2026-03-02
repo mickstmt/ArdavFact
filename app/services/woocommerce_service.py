@@ -191,8 +191,13 @@ def _upsert_producto(p_data: dict) -> str:
     return accion
 
 
-def sincronizar_productos() -> dict:
-    """Sincroniza todos los productos WooCommerce → DB. Retorna estadísticas."""
+def sincronizar_productos(progress_cb=None) -> dict:
+    """Sincroniza todos los productos WooCommerce → DB. Retorna estadísticas.
+
+    Args:
+        progress_cb: Callable opcional(procesados, creados, actualizados, errores)
+                     Se llama después de procesar cada página de 100 productos.
+    """
     wcapi = _get_wcapi()
     creados = actualizados = errores = 0
     pagina = 1
@@ -220,6 +225,10 @@ def sincronizar_productos() -> dict:
                 errores += 1
 
         db.session.commit()
+
+        if progress_cb:
+            progress_cb(creados + actualizados + errores, creados, actualizados, errores)
+
         if len(productos_data) < 100:
             break
         pagina += 1
@@ -231,11 +240,26 @@ def sincronizar_productos() -> dict:
 # Sync completo
 # ─────────────────────────────────────────────────────────────────────────────
 
-def sincronizar_todo() -> dict:
-    """Sincroniza categorías y productos. Retorna resumen completo."""
+def sincronizar_todo(progress_cb=None) -> dict:
+    """Sincroniza categorías y productos. Retorna resumen completo.
+
+    Args:
+        progress_cb: Callable opcional(fase, procesados, creados, actualizados, errores)
+    """
     logger.info('[WOO] Iniciando sincronización completa')
+
+    if progress_cb:
+        progress_cb('categorias', 0, 0, 0, 0)
     stats_cats = sincronizar_categorias()
-    stats_prods = sincronizar_productos()
+
+    if progress_cb:
+        progress_cb('productos', 0, 0, 0, 0)
+
+    def _prod_cb(procesados, creados, actualizados, errores):
+        if progress_cb:
+            progress_cb('productos', procesados, creados, actualizados, errores)
+
+    stats_prods = sincronizar_productos(progress_cb=_prod_cb)
     logger.info('[WOO] Sincronización completa. Cats=%s | Prods=%s', stats_cats, stats_prods)
     return {
         'categorias': stats_cats,

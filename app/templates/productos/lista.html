@@ -7,9 +7,43 @@
     <h4 class="mb-0 fw-semibold">Productos</h4>
     <p class="text-muted mb-0 small">{{ total_db }} producto(s) en BD. Sincronizados desde WooCommerce.</p>
   </div>
-  <button class="btn btn-primary btn-sm" onclick="syncWooCommerce()" id="btnSync">
-    <i class="bi bi-arrow-repeat me-1"></i>Sincronizar WooCommerce
+  <button class="btn btn-primary btn-sm" onclick="iniciarSync()" id="btnSync"
+          {% if sync_running %}disabled{% endif %}>
+    {% if sync_running %}
+      <span class="spinner-border spinner-border-sm me-1"></span>Sincronizando…
+    {% else %}
+      <i class="bi bi-arrow-repeat me-1"></i>Sincronizar WooCommerce
+    {% endif %}
   </button>
+</div>
+
+<!-- Panel de progreso de sincronización (oculto por defecto) -->
+<div id="syncPanel" class="af-card p-4 mb-4 {% if not sync_running %}d-none{% endif %}">
+  <div class="d-flex align-items-center gap-3 mb-3">
+    <span class="spinner-border spinner-border-sm text-primary" id="syncSpinner"></span>
+    <div>
+      <div class="fw-semibold" id="syncFase">Iniciando sincronización…</div>
+      <div class="text-muted small" id="syncDetalle">Conectando con WooCommerce…</div>
+    </div>
+  </div>
+  <div class="progress" style="height:6px;">
+    <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary"
+         id="syncProgressBar" role="progressbar" style="width:100%"></div>
+  </div>
+  <div class="row g-3 mt-2 text-center">
+    <div class="col-4">
+      <div class="text-success fw-bold fs-5" id="cntCreados">—</div>
+      <div class="text-muted small">Nuevos</div>
+    </div>
+    <div class="col-4">
+      <div class="text-primary fw-bold fs-5" id="cntActualizados">—</div>
+      <div class="text-muted small">Actualizados</div>
+    </div>
+    <div class="col-4">
+      <div class="text-danger fw-bold fs-5" id="cntErrores">—</div>
+      <div class="text-muted small">Errores</div>
+    </div>
+  </div>
 </div>
 
 <!-- Filtros -->
@@ -106,7 +140,7 @@
       <tr>
         <td colspan="7" class="text-center text-muted py-5">
           <i class="bi bi-box-seam" style="font-size:2rem;opacity:.3;display:block;"></i>
-          Sin productos. <a href="#" onclick="syncWooCommerce()">Sincroniza desde WooCommerce</a>.
+          Sin productos. <a href="#" onclick="iniciarSync()">Sincroniza desde WooCommerce</a>.
         </td>
       </tr>
       {% endfor %}
@@ -135,26 +169,116 @@
 
 {% block scripts %}
 <script>
-async function syncWooCommerce() {
-  const btn = document.getElementById('btnSync');
-  const orig = btn.innerHTML;
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Sincronizando…';
+const URL_SYNC        = '{{ url_for("productos.sync_woocommerce") }}';
+const URL_SYNC_STATUS = '{{ url_for("productos.sync_status") }}';
 
+let _pollInterval = null;
+
+// ── Arrancar sincronización ──────────────────────────────────────────────────
+async function iniciarSync() {
   try {
-    const data = await afFetch('{{ url_for("productos.sync_woocommerce") }}', { method: 'POST' });
-    if (data.success) {
-      showToast('Sincronizado', data.message, 'success');
-      setTimeout(() => window.location.reload(), 1500);
-    } else {
-      showToast('Error', data.message, 'danger');
+    const data = await afFetch(URL_SYNC, { method: 'POST' });
+
+    if (!data.success) {
+      // Ya hay sync en curso o WooCommerce no está configurado
+      showToast('Aviso', data.message, 'warning');
+      if (data.message.includes('curso')) {
+        mostrarPanel();
+        arrancarPolling();
+      }
+      return;
     }
+
+    // Sync iniciado → mostrar panel y comenzar polling
+    mostrarPanel();
+    arrancarPolling();
+
   } catch (e) {
-    showToast('Error', 'Error de red al sincronizar.', 'danger');
-  } finally {
-    btn.disabled = false;
-    btn.innerHTML = orig;
+    showToast('Error', 'No se pudo iniciar la sincronización.', 'danger');
   }
 }
+
+// ── Panel de progreso ────────────────────────────────────────────────────────
+function mostrarPanel() {
+  document.getElementById('syncPanel').classList.remove('d-none');
+  const btn = document.getElementById('btnSync');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Sincronizando…';
+}
+
+function ocultarPanel() {
+  document.getElementById('syncPanel').classList.add('d-none');
+  const btn = document.getElementById('btnSync');
+  btn.disabled = false;
+  btn.innerHTML = '<i class="bi bi-arrow-repeat me-1"></i>Sincronizar WooCommerce';
+}
+
+// ── Polling de estado ────────────────────────────────────────────────────────
+function arrancarPolling() {
+  if (_pollInterval) return;
+  _pollInterval = setInterval(consultarStatus, 3000);
+}
+
+function detenerPolling() {
+  if (_pollInterval) {
+    clearInterval(_pollInterval);
+    _pollInterval = null;
+  }
+}
+
+async function consultarStatus() {
+  try {
+    const s = await afFetch(URL_SYNC_STATUS);
+    actualizarUI(s);
+
+    if (s.finished) {
+      detenerPolling();
+      ocultarPanel();
+
+      if (s.success) {
+        showToast('Sincronización completada', s.message, 'success');
+        setTimeout(() => window.location.reload(), 2000);
+      } else {
+        showToast('Error en sincronización', s.message, 'danger');
+      }
+    }
+  } catch (e) {
+    // Error de red transitorio — seguir intentando
+  }
+}
+
+function actualizarUI(s) {
+  const faseTxt = {
+    'categorias': 'Sincronizando categorías…',
+    'productos':  'Sincronizando productos…',
+    'completado': 'Completado',
+    'error':      'Error durante la sincronización',
+  };
+
+  document.getElementById('syncFase').textContent =
+    faseTxt[s.fase] || 'Sincronizando…';
+
+  if (s.fase === 'productos' && s.procesados > 0) {
+    document.getElementById('syncDetalle').textContent =
+      `${s.procesados} productos procesados`;
+  } else if (s.fase === 'categorias') {
+    document.getElementById('syncDetalle').textContent =
+      'Obteniendo categorías de WooCommerce…';
+  } else {
+    document.getElementById('syncDetalle').textContent = '';
+  }
+
+  if (s.procesados > 0) {
+    document.getElementById('cntCreados').textContent     = s.creados;
+    document.getElementById('cntActualizados').textContent = s.actualizados;
+    document.getElementById('cntErrores').textContent     = s.errores;
+  }
+}
+
+// ── Al cargar: si sync estaba corriendo antes del reload, reconectar ─────────
+{% if sync_running %}
+mostrarPanel();
+arrancarPolling();
+{% endif %}
 </script>
 {% endblock %}

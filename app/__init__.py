@@ -132,8 +132,8 @@ def _register_security_headers(app: Flask) -> None:
 
 
 def _register_health(app: Flask) -> None:
-    """Registra el endpoint de health check."""
-    from flask import jsonify
+    """Registra el endpoint de health check y el redirect del favicon."""
+    from flask import jsonify, redirect, url_for
     from sqlalchemy import text
 
     @app.route('/health')
@@ -143,3 +143,7 @@ def _register_health(app: Flask) -> None:
             return jsonify({'status': 'ok', 'database': 'connected'}), 200
         except Exception as e:
             return jsonify({'status': 'error', 'database': str(e)}), 500
+
+    @app.route('/favicon.ico')
+    def favicon():
+        return redirect(url_for('static', filename='favicon.ico'))
