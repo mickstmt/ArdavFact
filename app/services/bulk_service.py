@@ -7,7 +7,7 @@ Formato esperado:
 
 Columnas Excel (0-indexed):
   A(0)=PedidoId/N°Orden | C(2)=Fecha | F(5)=DNI/Doc | G(6)=Nombre cliente
-  H(7)=Descripción | I(8)=SKU
+  H(7)=Descripción | I(8)=SKU | J(9)=Cantidad
   K(10)=Precio venta SIN IGV (base) | L(11)=IGV del ítem
   → precio con IGV = K + L
   S(18)=Costo Envío (con IGV)
@@ -36,6 +36,7 @@ _COL_DOC        = 5   # F - DNI / Doc. extranjería
 _COL_NOMBRE     = 6   # G - Nombre del cliente
 _COL_DESC       = 7   # H - Descripción del producto
 _COL_SKU        = 8   # I - SKU
+_COL_CANTIDAD   = 9   # J - Cantidad de unidades
 _COL_PRECIO_BASE = 10  # K - Precio de venta SIN IGV (base)
 _COL_IGV_ITEM   = 11  # L - IGV del ítem (K * 0.18)
 _COL_ENVIO      = 18  # S - Costo de envío (con IGV)
@@ -96,9 +97,10 @@ def analizar_excel(file_path: str, config: dict) -> list[dict]:
             _precio_con_igv = _base or '0'
 
         ordenes[numero_orden]['items_raw'].append({
-            'sku':         _val(row, _COL_SKU),
-            'descripcion': _val(row, _COL_DESC) or _val(row, _COL_NOMBRE),
-            'precio_str':  _precio_con_igv,
+            'sku':          _val(row, _COL_SKU),
+            'descripcion':  _val(row, _COL_DESC) or _val(row, _COL_NOMBRE),
+            'precio_str':   _precio_con_igv,
+            'cantidad_str': _val(row, _COL_CANTIDAD) or '1',
         })
 
     # Cache de clientes por número de documento: evita llamadas repetidas a ApisPeru
@@ -209,6 +211,15 @@ def _analizar_item(item_raw: dict) -> dict:
     except InvalidOperation:
         precio_con_igv = Decimal('0')
 
+    try:
+        cantidad = Decimal(
+            str(item_raw.get('cantidad_str', '1')).replace(',', '.').strip() or '1'
+        )
+        if cantidad <= 0:
+            cantidad = Decimal('1')
+    except InvalidOperation:
+        cantidad = Decimal('1')
+
     if precio_con_igv <= 0:
         error = f'Precio inválido para SKU "{sku}".'
 
@@ -224,11 +235,12 @@ def _analizar_item(item_raw: dict) -> dict:
             if not prod:
                 error = error or f'SKU "{sku}" no encontrado en la BD.'
 
-    calc = calcular_igv_item(precio_con_igv, Decimal('1'), '10')
+    calc = calcular_igv_item(precio_con_igv, cantidad, '10')
 
     return {
         'sku':                    sku,
         'descripcion':            desc,
+        'cantidad':               str(cantidad),
         'precio_con_igv':         str(precio_con_igv),
         'precio_sin_igv':         str(calc['precio_sin_igv']),
         'igv_unitario':           str(calc['igv_unitario']),
@@ -360,7 +372,7 @@ def _crear_comprobante(
             comprobante_id=comp.id,
             producto_nombre=it['descripcion'],
             producto_sku=it.get('sku', ''),
-            cantidad=Decimal('1'),
+            cantidad=Decimal(str(it.get('cantidad', '1'))),
             unidad_medida='NIU',
             precio_unitario_con_igv=Decimal(it['precio_con_igv']),
             precio_unitario_sin_igv=Decimal(it['precio_sin_igv']),
