@@ -1,0 +1,53 @@
+# Entorno virtual — no va al contenedor, pip instala desde requirements.txt
+venv/
+.venv/
+env/
+ENV/
+
+# Variables de entorno — se inyectan por Easypanel, nunca en la imagen
+.env
+.env.*
+
+# Archivos generados en runtime — serán volúmenes persistentes
+comprobantes/
+uploads/
+
+# Certificados digitales — se suben por separado al volumen
+certificados/
+
+# Control de versiones
+.git/
+.gitignore
+.dockerignore
+
+# Tests y cobertura — no necesarios en producción
+tests/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDEs y OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Docker compose (solo para desarrollo local)
+docker-compose.yml
+
+# Logs
+*.log
+logs/
+
+# Otros
+instance/
+*.sqlite3
+*.db

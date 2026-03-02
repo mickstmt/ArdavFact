@@ -16,9 +16,17 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-# Crear directorios de archivos persistentes
-RUN mkdir -p comprobantes uploads
+# Crear directorios de archivos persistentes (los volúmenes los sobrescribirán en runtime)
+RUN mkdir -p comprobantes uploads certificados
+
+# Variables de entorno para producción
+ENV FLASK_ENV=production
+ENV FLASK_APP=wsgi.py
 
 EXPOSE 80
 
-CMD ["gunicorn", "--bind", "0.0.0.0:80", "--workers", "2", "--timeout", "600", "wsgi:app"]
+# El entrypoint corre migraciones y luego arranca Gunicorn
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+CMD ["/entrypoint.sh"]
