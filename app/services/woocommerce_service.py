@@ -1,8 +1,10 @@
 """Sincronización de productos y categorías desde WooCommerce."""
 import logging
+import time
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Optional
 
+import requests as _requests
 from woocommerce import API
 from flask import current_app
 
@@ -13,6 +15,8 @@ logger = logging.getLogger(__name__)
 
 _IGV_FACTOR = Decimal('1.18')
 _DOS_DECIMALES = Decimal('0.01')
+_MAX_REINTENTOS = 3
+_ESPERA_REINTENTO = 8  # segundos entre reintentos
 
 
 def _get_wcapi() -> API:
@@ -22,8 +26,48 @@ def _get_wcapi() -> API:
         consumer_key=cfg['WOO_CONSUMER_KEY'],
         consumer_secret=cfg['WOO_CONSUMER_SECRET'],
         version='wc/v3',
-        timeout=30,
+        timeout=90,  # 90s — WooCommerce con variaciones puede ser lento
     )
+
+
+def _woo_get(wcapi: API, endpoint: str, params: dict) -> list:
+    """Ejecuta un GET a WooCommerce con reintentos automáticos.
+
+    Reintenta hasta _MAX_REINTENTOS veces ante:
+    - Timeout de conexión/lectura
+    - Respuestas 5xx (servidor caído o BD no disponible)
+
+    Returns:
+        list: JSON de la respuesta.
+
+    Raises:
+        Exception: Si se agotan los reintentos.
+    """
+    for intento in range(1, _MAX_REINTENTOS + 1):
+        try:
+            resp = wcapi.get(endpoint, params=params)
+            if resp.status_code == 200:
+                return resp.json()
+            if resp.status_code >= 500:
+                logger.warning(
+                    '[WOO] HTTP %s en %s (intento %d/%d) — reintentando en %ds…',
+                    resp.status_code, endpoint, intento, _MAX_REINTENTOS, _ESPERA_REINTENTO,
+                )
+                if intento < _MAX_REINTENTOS:
+                    time.sleep(_ESPERA_REINTENTO)
+                    continue
+            # 4xx u otro error no recuperable
+            raise Exception(f'HTTP {resp.status_code}: {resp.text[:200]}')
+        except (_requests.exceptions.Timeout, _requests.exceptions.ConnectionError) as exc:
+            logger.warning(
+                '[WOO] Timeout/conexión en %s (intento %d/%d) — reintentando en %ds…',
+                endpoint, intento, _MAX_REINTENTOS, _ESPERA_REINTENTO,
+            )
+            if intento < _MAX_REINTENTOS:
+                time.sleep(_ESPERA_REINTENTO)
+            else:
+                raise Exception(f'Timeout al conectar con WooCommerce después de {_MAX_REINTENTOS} intentos: {exc}')
+    raise Exception(f'Sin respuesta válida de WooCommerce en {endpoint}')
 
 
 def _precio_sin_igv(precio_con_igv: Decimal) -> Decimal:
@@ -45,14 +89,14 @@ def sincronizar_categorias() -> dict:
     creadas = actualizadas = errores = 0
     todas: list[dict] = []
 
-    # Recolectar todas las categorías primero
+    # Recolectar todas las categorías primero (con reintentos automáticos)
     pagina = 1
     while True:
-        resp = wcapi.get('products/categories', params={'per_page': 100, 'page': pagina})
-        if resp.status_code != 200:
-            logger.error('[WOO] Error obteniendo categorías: %s', resp.text)
+        try:
+            items = _woo_get(wcapi, 'products/categories', {'per_page': 100, 'page': pagina})
+        except Exception as exc:
+            logger.error('[WOO] Error obteniendo categorías pág %d: %s', pagina, exc)
             break
-        items = resp.json()
         if not items:
             break
         todas.extend(items)
@@ -203,12 +247,16 @@ def sincronizar_productos(progress_cb=None) -> dict:
     pagina = 1
 
     while True:
-        resp = wcapi.get('products', params={'per_page': 100, 'page': pagina, 'status': 'publish'})
-        if resp.status_code != 200:
-            logger.error('[WOO] Error obteniendo productos (página %s): %s', pagina, resp.text)
+        try:
+            productos_data = _woo_get(
+                wcapi, 'products',
+                {'per_page': 100, 'page': pagina, 'status': 'publish'},
+            )
+        except Exception as exc:
+            logger.error('[WOO] Error obteniendo productos pág %d: %s', pagina, exc)
+            errores += 100  # aproximado
             break
 
-        productos_data = resp.json()
         if not productos_data:
             break
 
