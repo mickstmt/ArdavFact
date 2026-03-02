@@ -10,7 +10,7 @@ flask db upgrade
 echo "--- Iniciando Gunicorn..."
 exec gunicorn \
     --bind 0.0.0.0:80 \
-    --workers 2 \
+    --workers 1 \
     --timeout 600 \
     --access-logfile - \
     --error-logfile - \
