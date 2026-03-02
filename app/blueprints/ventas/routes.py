@@ -45,10 +45,11 @@ def crear_venta():
             return jsonify({'success': False, 'message': 'Datos inválidos.'}), 400
 
         # ── Validaciones básicas ──
-        cliente_datos = payload.get('cliente')
-        items_datos   = payload.get('items', [])
-        costo_envio   = Decimal(str(payload.get('costo_envio', '0')))
-        numero_orden  = payload.get('numero_orden', '').strip() or None
+        cliente_datos      = payload.get('cliente')
+        items_datos        = payload.get('items', [])
+        costo_envio        = Decimal(str(payload.get('costo_envio', '0')))
+        numero_orden       = payload.get('numero_orden', '').strip() or None
+        fecha_emision_str  = (payload.get('fecha_emision') or '').strip() or None
 
         if not cliente_datos:
             return jsonify({'success': False, 'message': 'Cliente requerido.'}), 400
@@ -69,6 +70,14 @@ def crear_venta():
             tipo_sunat  = '03'
             serie       = config.get('SERIE_BOLETA', 'B001')
 
+        # ── Fecha de emisión ──
+        fecha_emision = datetime.utcnow()
+        if fecha_emision_str:
+            try:
+                fecha_emision = datetime.strptime(fecha_emision_str, '%Y-%m-%d')
+            except ValueError:
+                pass
+
         # ── Correlativo ──
         correlativo = _siguiente_correlativo(serie)
 
@@ -84,7 +93,7 @@ def crear_venta():
             numero_orden=numero_orden,
             costo_envio=costo_envio,
             estado='PENDIENTE',
-            fecha_emision=datetime.utcnow(),
+            fecha_emision=fecha_emision,
         )
         db.session.add(comprobante)
         db.session.flush()

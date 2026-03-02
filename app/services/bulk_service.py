@@ -207,9 +207,15 @@ def _analizar_item(item_raw: dict) -> dict:
 # Procesamiento (crear comprobantes)
 # ─────────────────────────────────────────────────────────────────────────────
 
-def procesar_ordenes(ordenes_json: list[dict], config: dict, vendedor_id: int) -> list[dict]:
+def procesar_ordenes(
+    ordenes_json: list[dict],
+    config: dict,
+    vendedor_id: int,
+    fecha_override: Optional[str] = None,
+) -> list[dict]:
     """
     Crea comprobantes para las órdenes OK o WARNING seleccionadas.
+    Si fecha_override (YYYY-MM-DD) está definida, sobreescribe la fecha de todas las órdenes.
     Retorna lista de resultados por orden.
     """
     resultados = []
@@ -224,7 +230,7 @@ def procesar_ordenes(ordenes_json: list[dict], config: dict, vendedor_id: int) -
             continue
 
         try:
-            resultado = _crear_comprobante(orden, config, vendedor_id)
+            resultado = _crear_comprobante(orden, config, vendedor_id, fecha_override=fecha_override)
             resultados.append(resultado)
         except Exception as exc:
             db.session.rollback()
@@ -248,7 +254,12 @@ def _siguiente_correlativo(serie: str) -> int:
     return (ultimo or 0) + 1
 
 
-def _crear_comprobante(orden: dict, config: dict, vendedor_id: int) -> dict:
+def _crear_comprobante(
+    orden: dict,
+    config: dict,
+    vendedor_id: int,
+    fecha_override: Optional[str] = None,
+) -> dict:
     """Crea y envía a SUNAT un comprobante para una orden analizada."""
     tipo_comprobante = orden['tipo_comprobante']
     serie = orden['serie']
@@ -269,9 +280,14 @@ def _crear_comprobante(orden: dict, config: dict, vendedor_id: int) -> dict:
     if not cliente_id and tipo_comprobante == 'FACTURA':
         raise ValueError(f'No se encontró cliente RUC {numero_doc} para emitir factura.')
 
-    # Fecha de emisión
+    # Fecha de emisión: fecha_override tiene prioridad sobre la del Excel
     fecha_emision = None
-    if orden.get('fecha_emision'):
+    if fecha_override:
+        try:
+            fecha_emision = datetime.strptime(fecha_override, '%Y-%m-%d')
+        except (ValueError, TypeError):
+            pass
+    if not fecha_emision and orden.get('fecha_emision'):
         try:
             fecha_emision = datetime.fromisoformat(orden['fecha_emision'])
         except (ValueError, TypeError):

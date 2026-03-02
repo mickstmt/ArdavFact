@@ -175,6 +175,13 @@
         <input type="text" id="numero-orden" placeholder="WooCommerce #"
                class="af-form-control" style="flex:1; font-size:0.82rem;">
       </div>
+      <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.75rem;">
+        <label style="font-size:0.78rem; color:var(--af-text-muted); white-space:nowrap; margin:0;" title="Fecha de emisión del comprobante">
+          <i class="bi bi-calendar-date"></i> Fecha:
+        </label>
+        <input type="date" id="fecha-emision"
+               class="af-form-control" style="flex:1; font-size:0.82rem;">
+      </div>
       <div class="total-row"><span>Base imponible</span><span id="t-base">S/ 0.00</span></div>
       <div class="total-row"><span>IGV 18%</span><span id="t-igv">S/ 0.00</span></div>
       <div class="total-row"><span>Envío (gravado)</span><span id="t-envio">S/ 0.00</span></div>
@@ -235,6 +242,15 @@ let clienteActual   = null;
 let tipoComprobante = 'BOLETA';   // default
 let serieActual     = SERIE_BOLETA;
 let tipoLocked      = false;      // true cuando el cliente forza el tipo
+
+// Fecha por defecto: hoy en zona horaria local
+(function() {
+  const hoy = new Date();
+  const yyyy = hoy.getFullYear();
+  const mm   = String(hoy.getMonth() + 1).padStart(2, '0');
+  const dd   = String(hoy.getDate()).padStart(2, '0');
+  document.getElementById('fecha-emision').value = `${yyyy}-${mm}-${dd}`;
+})();
 
 // ── Tipo de comprobante ──
 function setTipo(tipo, locked) {
@@ -610,11 +626,14 @@ async function emitirComprobante() {
   if (!clienteActual) { showToast('Cliente requerido', 'Selecciona un cliente.', 'warning'); return; }
   if (!cartItems.length) { showToast('Carrito vacío', 'Agrega al menos un producto.', 'warning'); return; }
 
+  const fechaEmision = document.getElementById('fecha-emision').value || null;
+
   const confirm = await Swal.fire({
     title: `Emitir ${tipoComprobante} ${serieActual}`,
     html: `<div style="text-align:left; font-size:0.9rem;">
       <div><strong>Cliente:</strong> ${clienteActual.nombre_completo || ''}</div>
       <div><strong>Doc:</strong> ${clienteActual.tipo_documento} ${clienteActual.numero_documento}</div>
+      <div><strong>Fecha:</strong> ${fechaEmision || 'Hoy'}</div>
       <div style="font-size:1.1rem; font-weight:700; color:#0d6efd; margin-top:0.75rem;">Total: ${document.getElementById('t-total').textContent}</div>
     </div>`,
     icon: 'question', showCancelButton: true,
@@ -642,6 +661,7 @@ async function emitirComprobante() {
         })),
         costo_envio: parseFloat(document.getElementById('costo-envio').value) || 0,
         numero_orden: document.getElementById('numero-orden').value.trim() || null,
+        fecha_emision: document.getElementById('fecha-emision').value || null,
       }
     });
     if (res.success) {
@@ -652,6 +672,8 @@ async function emitirComprobante() {
       calcularTotales();
       document.getElementById('costo-envio').value = '0';
       document.getElementById('numero-orden').value = '';
+      const hoyReset = new Date();
+      document.getElementById('fecha-emision').value = `${hoyReset.getFullYear()}-${String(hoyReset.getMonth()+1).padStart(2,'0')}-${String(hoyReset.getDate()).padStart(2,'0')}`;
     } else { showToast('Error', res.message, 'danger'); }
   } catch(e) { showToast('Error', e.message, 'danger'); }
   finally { btnRestore(btn); }

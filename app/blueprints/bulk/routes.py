@@ -101,6 +101,7 @@ def procesar():
     """Crea comprobantes para las órdenes seleccionadas (OK y WARNING)."""
     payload = request.get_json(force=True) or {}
     ordenes = payload.get('ordenes', [])
+    fecha_override = (payload.get('fecha_override') or '').strip() or None
 
     if not ordenes:
         return jsonify({'success': False, 'message': 'Sin órdenes para procesar.'}), 400
@@ -110,6 +111,7 @@ def procesar():
             ordenes,
             current_app.config,
             vendedor_id=current_user.id,
+            fecha_override=fecha_override,
         )
     except Exception as exc:
         current_app.logger.error('[BULK] Error en procesar: %s', exc, exc_info=True)

@@ -17,6 +17,29 @@
   </div>
 </div>
 
+<!-- Selector de fecha de emisión -->
+<div class="af-card p-3 mb-4">
+  <div class="row align-items-center g-2 flex-wrap">
+    <div class="col-auto">
+      <div class="form-check form-switch mb-0">
+        <input class="form-check-input" type="checkbox" id="toggleFechaOverride" onchange="onToggleFecha(this.checked)">
+        <label class="form-check-label fw-semibold" for="toggleFechaOverride" style="font-size:0.85rem;">
+          <i class="bi bi-calendar-date me-1 text-primary"></i>Usar fecha personalizada
+        </label>
+      </div>
+    </div>
+    <div class="col-auto" id="fechaInputWrapper" style="opacity:0.4; pointer-events:none;">
+      <input type="date" id="fechaEmisionOverride" class="form-control form-control-sm" style="min-width:160px;">
+    </div>
+    <div class="col">
+      <span class="text-muted" id="fechaHint" style="font-size:0.78rem;">
+        <i class="bi bi-info-circle"></i>
+        Activa el toggle para usar una fecha única en <strong>todos</strong> los comprobantes. Si está desactivado se respetará la fecha de cada orden del Excel.
+      </span>
+    </div>
+  </div>
+</div>
+
 <!-- Resumen -->
 <div class="row g-3 mb-4" id="resumenCards">
   <div class="col-6 col-md-3">
@@ -119,7 +142,20 @@
 <script>
   let todasLasOrdenes = [];
 
+  function onToggleFecha(activo) {
+    const wrapper = document.getElementById('fechaInputWrapper');
+    wrapper.style.opacity       = activo ? '1'    : '0.4';
+    wrapper.style.pointerEvents = activo ? 'auto' : 'none';
+  }
+
   document.addEventListener('DOMContentLoaded', () => {
+    // Fecha por defecto: hoy en zona horaria local (el toggle arranca desactivado)
+    const hoy = new Date();
+    const yyyy = hoy.getFullYear();
+    const mm   = String(hoy.getMonth() + 1).padStart(2, '0');
+    const dd   = String(hoy.getDate()).padStart(2, '0');
+    document.getElementById('fechaEmisionOverride').value = `${yyyy}-${mm}-${dd}`;
+
     const ordenesRaw = sessionStorage.getItem('bulk_ordenes');
     const resumenRaw = sessionStorage.getItem('bulk_resumen');
 
@@ -224,13 +260,22 @@
       .map(c => todasLasOrdenes[parseInt(c.value)]);
 
     if (!seleccionados.length) {
-      showToast('warning', 'Selecciona al menos una orden para procesar.');
+      showToast('Aviso', 'Selecciona al menos una orden para procesar.', 'warning');
       return;
     }
 
+    const toggleActivo  = document.getElementById('toggleFechaOverride').checked;
+    const fechaOverride = toggleActivo ? (document.getElementById('fechaEmisionOverride').value || null) : null;
+    const fechaTexto = fechaOverride
+      ? `<div style="margin-top:0.4rem;"><strong>Fecha emisión:</strong> ${fechaOverride}</div>`
+      : `<div style="margin-top:0.4rem; color:#6c757d; font-size:0.85rem;"><i class="bi bi-info-circle"></i> Se usará la fecha de cada orden del Excel.</div>`;
+
     const confirmado = await Swal.fire({
       title: `¿Procesar ${seleccionados.length} orden(es)?`,
-      text: 'Se crearán comprobantes y se enviarán a SUNAT.',
+      html: `<div style="text-align:left; font-size:0.9rem;">
+        <div>Se crearán comprobantes y se enviarán a SUNAT.</div>
+        ${fechaTexto}
+      </div>`,
       icon: 'question',
       showCancelButton: true,
       confirmButtonText: 'Sí, procesar',
@@ -253,11 +298,10 @@
     }, 300);
 
     try {
-      const resp = await afFetch('{{ url_for("bulk.procesar") }}', {
+      const data = await afFetch('{{ url_for("bulk.procesar") }}', {
         method: 'POST',
-        body: JSON.stringify({ ordenes: seleccionados }),
+        body: { ordenes: seleccionados, fecha_override: fechaOverride },
       });
-      const data = await resp.json();
 
       clearInterval(interval);
       document.getElementById('progresoBarra').style.width = '100%';
@@ -267,7 +311,7 @@
 
     } catch (e) {
       clearInterval(interval);
-      showToast('error', 'Error de red al procesar.');
+      showToast('Error', 'Error de red al procesar: ' + e.message, 'danger');
     } finally {
       btnProcesar.disabled = false;
     }
