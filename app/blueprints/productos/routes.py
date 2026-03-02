@@ -2,7 +2,7 @@
 import threading
 from flask import render_template, jsonify, request, current_app
 from flask_login import login_required
-from app.extensions import db
+from app.extensions import db, limiter
 from app.models.producto import Producto, Categoria
 from app.services import woocommerce_service as woo_svc
 from app.decorators import requiere_permiso
@@ -97,8 +97,9 @@ def sync_woocommerce():
 
 @productos_bp.route('/sync/status', methods=['GET'])
 @login_required
+@limiter.exempt
 def sync_status():
-    """Devuelve el estado actual de la sincronización."""
+    """Devuelve el estado actual de la sincronización (exento de rate limit — es polling)."""
     return jsonify(_sync_status)
 
 
