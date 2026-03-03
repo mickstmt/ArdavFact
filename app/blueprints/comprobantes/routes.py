@@ -122,10 +122,10 @@ def reenviar_sunat(comp_id: int):
     if not comp:
         abort(404)
 
-    if comp.estado not in ('PENDIENTE', 'RECHAZADO'):
+    if comp.estado not in ('PENDIENTE', 'ENVIADO', 'RECHAZADO'):
         return jsonify({
             'success': False,
-            'message': f'Estado actual: {comp.estado}. Solo PENDIENTE/RECHAZADO pueden reenviarse.',
+            'message': f'Estado actual: {comp.estado}. Solo PENDIENTE/ENVIADO/RECHAZADO pueden reenviarse.',
         }), 400
 
     resultado = mipse_service.procesar_comprobante(comp)

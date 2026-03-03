@@ -236,9 +236,16 @@
         </a>
         {% endif %}
 
-        {% if comprobante.estado == 'PENDIENTE' %}
-        <button onclick="reenviarSunat({{ comprobante.id }})" class="action-btn" style="cursor:pointer; width:100%;">
+        {% if comprobante.estado in ('PENDIENTE', 'ENVIADO', 'RECHAZADO') %}
+        <button onclick="reenviarSunat({{ comprobante.id }}, '{{ comprobante.estado }}')"
+                class="action-btn" style="cursor:pointer; width:100%;">
+          {% if comprobante.estado == 'ENVIADO' %}
+          <i class="bi bi-arrow-clockwise"></i>Consultar CDR / Reintentar
+          {% elif comprobante.estado == 'RECHAZADO' %}
+          <i class="bi bi-cloud-upload"></i>Reenviar a SUNAT
+          {% else %}
           <i class="bi bi-cloud-upload"></i>Enviar a SUNAT
+          {% endif %}
         </button>
         {% endif %}
 
@@ -277,12 +284,15 @@
 
 {% block extra_js %}
 <script>
-async function reenviarSunat(compId) {
+async function reenviarSunat(compId, estado) {
+  const esEnviado = estado === 'ENVIADO';
   const ok = await Swal.fire({
-    title: 'Reenviar a SUNAT',
-    text: 'Se intentará enviar este comprobante nuevamente.',
+    title: esEnviado ? 'Consultar CDR' : 'Reenviar a SUNAT',
+    text: esEnviado
+      ? 'Se consultará el estado en SUNAT y se intentará recuperar el CDR.'
+      : 'Se intentará enviar este comprobante nuevamente.',
     icon: 'question', showCancelButton: true,
-    confirmButtonText: '<i class="bi bi-cloud-upload"></i> Enviar',
+    confirmButtonText: esEnviado ? '<i class="bi bi-arrow-clockwise"></i> Consultar' : '<i class="bi bi-cloud-upload"></i> Enviar',
     confirmButtonColor: '#0d6efd',
     background: 'var(--af-surface)', color: 'var(--af-text)',
   });
