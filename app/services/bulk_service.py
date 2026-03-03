@@ -8,8 +8,9 @@ Formato esperado:
 Columnas Excel (0-indexed):
   A(0)=PedidoId/N°Orden | C(2)=Fecha | F(5)=DNI/Doc | G(6)=Nombre cliente
   H(7)=Descripción | I(8)=SKU | J(9)=Cantidad
-  K(10)=Venta Total Pedido PEN = precio de venta CON IGV incluido
-  S(18)=Costo Envío (con IGV)
+  K(10)=Venta Total Pedido PEN (total de la orden, referencia)
+  L(11)=Precio individual ítem CON IGV incluido
+  T(19)=Costo Envío (con IGV)
 """
 import logging
 from datetime import datetime
@@ -36,8 +37,8 @@ _COL_NOMBRE     = 6   # G - Nombre del cliente
 _COL_DESC       = 7   # H - Descripción del producto
 _COL_SKU        = 8   # I - SKU
 _COL_CANTIDAD   = 9   # J - Cantidad de unidades
-_COL_PRECIO     = 10  # K - Venta Total Pedido PEN (precio con IGV incluido)
-_COL_ENVIO      = 18  # S - Costo de envío (con IGV)
+_COL_PRECIO     = 11  # L - Precio individual ítem (con IGV incluido)
+_COL_ENVIO      = 19  # T - Costo de envío (con IGV, desplazado por nueva col L)
 
 _IGV_FACTOR = Decimal('1.18')
 
