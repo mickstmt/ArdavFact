@@ -72,54 +72,89 @@ def consultar_documento():
 @api_bp.route('/categorias')
 @login_required
 def get_categorias():
-    """Árbol de categorías raíz (sin padre)."""
-    cats = Categoria.query.filter_by(padre_id=None).order_by(Categoria.nombre).all()
-    return jsonify({
-        'success': True,
-        'data': [{'id': c.id, 'nombre': c.nombre, 'count': c.count} for c in cats],
-    })
+    """Árbol completo de categorías con subcategorías."""
+    todas = Categoria.query.order_by(Categoria.nombre).all()
+    cat_dict = {}
+    raices = []
+
+    for c in todas:
+        cat_data = {
+            'id': c.id,
+            'nombre': c.nombre,
+            'count': c.count,
+            'padre_id': c.padre_id or 0,
+            'hijos': [],
+        }
+        cat_dict[c.id] = cat_data
+        if c.padre_id is None:
+            raices.append(cat_data)
+
+    # Anidar subcategorías
+    for cat_data in cat_dict.values():
+        padre_id = cat_data['padre_id']
+        if padre_id and padre_id in cat_dict:
+            cat_dict[padre_id]['hijos'].append(cat_data)
+
+    return jsonify({'success': True, 'data': raices})
 
 
 @api_bp.route('/productos-por-categoria/<int:categoria_id>')
 @login_required
 def get_productos_por_categoria(categoria_id: int):
-    """Productos de una categoría (incluyendo subcategorías)."""
-    cat = db.session.get(Categoria, categoria_id)
-    if not cat:
-        return jsonify({'success': False, 'message': 'Categoría no encontrada'}), 404
-
-    # Obtener IDs de la categoría y sus hijos directos
-    ids = [cat.id] + [h.id for h in cat.hijos]
-
-    productos = (
-        Producto.query
-        .filter(Producto.categorias.any(Categoria.id.in_(ids)))
-        .order_by(Producto.nombre)
-        .all()
-    )
+    """Productos de una categoría (incluyendo subcategorías). categoria_id=0 = todos."""
+    if categoria_id == 0:
+        productos = Producto.query.order_by(Producto.nombre).limit(100).all()
+    else:
+        cat = db.session.get(Categoria, categoria_id)
+        if not cat:
+            return jsonify({'success': False, 'message': 'Categoría no encontrada'}), 404
+        ids = [cat.id] + [h.id for h in cat.hijos]
+        productos = (
+            Producto.query
+            .filter(Producto.categorias.any(Categoria.id.in_(ids)))
+            .order_by(Producto.nombre)
+            .all()
+        )
     return jsonify({'success': True, 'data': [_producto_dict(p) for p in productos]})
 
 
 @api_bp.route('/buscar-productos')
 @login_required
 def buscar_productos():
-    """Búsqueda de productos por nombre o SKU."""
-    q = request.args.get('q', '').strip()
-    if len(q) < 2:
-        return jsonify({'success': True, 'data': []})
+    """Búsqueda de productos por nombre o SKU (incluyendo SKUs de variaciones).
 
-    t = f'%{q}%'
-    productos = (
-        Producto.query
-        .filter(
+    Parámetros:
+        q           -- texto de búsqueda (mínimo 2 chars)
+        categoria_id -- filtrar por categoría cuando no hay texto (opcional)
+    """
+    q           = request.args.get('q', '').strip()
+    categoria_id = request.args.get('categoria_id', '0').strip()
+
+    query = Producto.query
+
+    if len(q) >= 2:
+        t = f'%{q}%'
+        query = query.filter(
             db.or_(
                 Producto.nombre.ilike(t),
                 Producto.sku.ilike(t),
+                Producto.variaciones.any(Variacion.sku.ilike(t)),
             )
         )
-        .limit(20)
-        .all()
-    )
+    elif categoria_id and categoria_id != '0':
+        # Sin texto pero con categoría: delegar al endpoint de categoría
+        try:
+            cat_id = int(categoria_id)
+        except ValueError:
+            return jsonify({'success': True, 'data': []})
+        cat = db.session.get(Categoria, cat_id)
+        if cat:
+            ids = [cat.id] + [h.id for h in cat.hijos]
+            query = query.filter(Producto.categorias.any(Categoria.id.in_(ids)))
+    else:
+        return jsonify({'success': True, 'data': []})
+
+    productos = query.order_by(Producto.nombre).limit(50).all()
     return jsonify({'success': True, 'data': [_producto_dict(p) for p in productos]})
 
 

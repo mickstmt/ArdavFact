@@ -6,7 +6,6 @@ from flask import render_template, request, jsonify, current_app, abort
 from flask_login import login_required, current_user
 from app.extensions import db
 from app.models.comprobante import Comprobante, ComprobanteItem
-from app.models.producto import Categoria
 from app.services.cliente_service import (
     buscar_cliente_local,
     guardar_cliente_desde_dict,
@@ -25,10 +24,8 @@ from . import ventas_bp
 @login_required
 @requiere_permiso('ventas.crear')
 def nueva_venta():
-    categorias = Categoria.query.filter_by(padre_id=None).order_by(Categoria.nombre).all()
     config = current_app.config
     return render_template('ventas/nueva.html',
-        categorias=categorias,
         serie_factura=config.get('SERIE_FACTURA', 'F001'),
         serie_boleta=config.get('SERIE_BOLETA', 'B001'),
     )
