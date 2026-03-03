@@ -307,12 +307,29 @@ def _crear_comprobante(
     if numero_doc:
         resultado_cli = buscar_o_crear_cliente(numero_doc)
         if resultado_cli['encontrado']:
-            from app.models.cliente import Cliente as ClienteModel
-            cli = ClienteModel.query.filter_by(
-                numero_documento=numero_doc
-            ).first()
+            cli = Cliente.query.filter_by(numero_documento=numero_doc).first()
             if cli:
                 cliente_id = cli.id
+        else:
+            # No encontrado en ApisPeru: crear/recuperar cliente mínimo con datos del Excel
+            cli = Cliente.query.filter_by(numero_documento=numero_doc).first()
+            if not cli:
+                nombre_raw = (orden.get('nombre_cliente') or '').strip()
+                if len(numero_doc) == 11:
+                    cli = Cliente(
+                        tipo_documento='RUC',
+                        numero_documento=numero_doc,
+                        razon_social=nombre_raw or 'Sin Razón Social',
+                    )
+                else:
+                    cli = Cliente(
+                        tipo_documento='DNI' if len(numero_doc) == 8 else 'CE',
+                        numero_documento=numero_doc,
+                        nombres=nombre_raw or 'Consumidor Final',
+                    )
+                db.session.add(cli)
+                db.session.flush()
+            cliente_id = cli.id
 
     if not cliente_id and tipo_comprobante == 'FACTURA':
         raise ValueError(f'No se encontró cliente RUC {numero_doc} para emitir factura.')
