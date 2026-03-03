@@ -135,13 +135,19 @@ def reenviar_sunat(comp_id: int):
 
     db.session.commit()
 
+    if resultado['success']:
+        message = f'Enviado. Estado SUNAT: {resultado["estado"]}.'
+    else:
+        msg_sunat = resultado.get('mensaje_sunat', '')
+        # Distinguir error temporal de SUNAT vs. error real
+        if 'no responde' in msg_sunat.lower() or 'intenta el reenv' in msg_sunat.lower():
+            message = 'SUNAT no está disponible en este momento. El comprobante quedó en PENDIENTE y se reintentará automáticamente esta noche.'
+        else:
+            message = f'Error: {msg_sunat}'
+
     return jsonify({
         'success': resultado['success'],
-        'message': (
-            f'Enviado. Estado SUNAT: {resultado["estado"]}.'
-            if resultado['success']
-            else f'Error: {resultado["mensaje_sunat"]}'
-        ),
+        'message': message,
         'estado': comp.estado,
     })
 
@@ -163,7 +169,7 @@ def enviar_lote():
 
     comprobantes = Comprobante.query.filter(
         Comprobante.id.in_(ids),
-        Comprobante.estado.in_(('PENDIENTE', 'RECHAZADO')),
+        Comprobante.estado.in_(('PENDIENTE', 'ENVIADO', 'RECHAZADO')),
     ).all()
 
     enviados = errores = 0
