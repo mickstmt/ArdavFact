@@ -25,7 +25,7 @@ from app.models.comprobante import Comprobante, ComprobanteItem
 from app.models.producto import Variacion, Producto
 from app.services.utils import calcular_igv_item, calcular_totales_comprobante
 from app.services import mipse_service, file_service as file_svc
-from app.services.cliente_service import buscar_o_crear_cliente
+from app.services.cliente_service import buscar_o_crear_cliente, guardar_cliente_desde_dict
 
 logger = logging.getLogger(__name__)
 
@@ -307,9 +307,9 @@ def _crear_comprobante(
     if numero_doc:
         resultado_cli = buscar_o_crear_cliente(numero_doc)
         if resultado_cli['encontrado']:
-            cli = Cliente.query.filter_by(numero_documento=numero_doc).first()
-            if cli:
-                cliente_id = cli.id
+            # guardar_cliente_desde_dict guarda si fuente='apisperu' o recupera si fuente='local'
+            cli = guardar_cliente_desde_dict(resultado_cli['cliente'])
+            cliente_id = cli.id
         else:
             # No encontrado en ApisPeru: crear/recuperar cliente mínimo con datos del Excel
             cli = Cliente.query.filter_by(numero_documento=numero_doc).first()
