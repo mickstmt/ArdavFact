@@ -153,6 +153,68 @@ def reenviar_sunat(comp_id: int):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Consultar estado en MiPSE (sin reenviar)
+# ─────────────────────────────────────────────────────────────────────────────
+
+@comprobantes_bp.route('/<int:comp_id>/consultar-sunat', methods=['POST'])
+@login_required
+@requiere_permiso('ventas.ver')
+def consultar_sunat(comp_id: int):
+    """Consulta el estado actual del comprobante en MiPSE/SUNAT sin reenviarlo."""
+    comp = db.session.get(Comprobante, comp_id)
+    if not comp:
+        abort(404)
+
+    try:
+        token = mipse_service.obtener_token()
+        nombre = nombre_archivo(comp)
+        resultado = mipse_service.consultar_estado(nombre, token)
+
+        estado_sunat = resultado.get('estado_sunat', '')
+        tiene_cdr    = bool(resultado.get('cdr'))
+        codigo       = resultado.get('codigo', '')
+        descripcion  = resultado.get('descripcion', '')
+
+        # Si MiPSE tiene el comprobante como ACEPTADO, actualizar BD y guardar CDR
+        if estado_sunat in ('ACEPTADO', 'ACEPTADO CON OBSERVACIONES'):
+            comp.estado = 'ACEPTADO'
+            comp.codigo_sunat  = str(codigo)
+            comp.mensaje_sunat = descripcion
+            if not comp.fecha_envio_sunat:
+                from datetime import datetime
+                comp.fecha_envio_sunat = datetime.utcnow()
+            if tiene_cdr:
+                fs = file_svc.get_file_service()
+                fs.guardar_archivos(comp, resultado)
+            db.session.commit()
+            message = f'SUNAT tiene el comprobante como ACEPTADO. BD actualizada.'
+        elif estado_sunat == 'RECHAZADO':
+            comp.estado = 'RECHAZADO'
+            comp.codigo_sunat  = str(codigo)
+            comp.mensaje_sunat = descripcion
+            db.session.commit()
+            message = f'SUNAT rechazó el comprobante. Código: {codigo} — {descripcion}'
+        else:
+            message = f'Estado en MiPSE: {estado_sunat or "desconocido"}. Código: {codigo}. {descripcion}'
+
+        return jsonify({
+            'success': True,
+            'message': message,
+            'estado_sunat': estado_sunat,
+            'estado_bd': comp.estado,
+            'codigo': codigo,
+            'descripcion': descripcion,
+            'tiene_cdr': tiene_cdr,
+        })
+
+    except mipse_service.MiPSEError as e:
+        return jsonify({
+            'success': False,
+            'message': f'Error consultando MiPSE: {e}',
+        }), 502
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Envío en lote
 # ─────────────────────────────────────────────────────────────────────────────
 

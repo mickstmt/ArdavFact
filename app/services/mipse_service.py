@@ -39,7 +39,7 @@ class MiPSEDuplicadoError(MiPSEError):
 
 def _base_url() -> str:
     cfg = current_app.config
-    return f"{cfg.get('MIPSE_URL', 'https://api.mipse.pe')}/pro/{cfg.get('MIPSE_SYSTEM', 'beta')}"
+    return f"{cfg.get('MIPSE_URL', 'https://api.mipse.pe')}/pro/{cfg.get('MIPSE_SYSTEM', 'produccion')}"
 
 
 def _auth_payload() -> dict:
@@ -48,6 +48,14 @@ def _auth_payload() -> dict:
         'usuario':   cfg.get('MIPSE_USUARIO', ''),
         'contraseña': cfg.get('MIPSE_PASSWORD', ''),
     }
+
+
+def _headers(token: str | None = None) -> dict:
+    """Headers comunes para todas las peticiones a MiPSE."""
+    h = {'Accept': 'application/json', 'Content-Type': 'application/json'}
+    if token:
+        h['Authorization'] = f'Bearer {token}'
+    return h
 
 
 def obtener_token() -> str:
@@ -61,7 +69,7 @@ def obtener_token() -> str:
     """
     url = f'{_base_url()}/auth/cpe/token'
     try:
-        r = requests.post(url, json=_auth_payload(), timeout=15)
+        r = requests.post(url, json=_auth_payload(), headers=_headers(), timeout=15)
         r.raise_for_status()
         data = r.json()
         token = data.get('token_acceso') or data.get('token') or data.get('access_token')
@@ -86,10 +94,9 @@ def firmar_xml(nombre: str, xml_b64: str, token: str) -> str:
         str: XML firmado en base64.
     """
     url = f'{_base_url()}/cpe/generar'
-    headers = {'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'}
     payload = {'tipo_integracion': 0, 'nombre_archivo': nombre, 'contenido_archivo': xml_b64}
     try:
-        r = requests.post(url, json=payload, headers=headers, timeout=30)
+        r = requests.post(url, json=payload, headers=_headers(token), timeout=60)
         r.raise_for_status()
         data = r.json()
         # MiPSE devuelve el XML firmado en el campo 'xml'
@@ -114,10 +121,9 @@ def enviar_comprobante(nombre: str, xml_firmado_b64: str, token: str) -> dict:
         MiPSEError: En otros errores de envío.
     """
     url = f'{_base_url()}/cpe/enviar'
-    headers = {'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'}
     payload = {'nombre_xml_firmado': nombre, 'contenido_xml_firmado': xml_firmado_b64}
     try:
-        r = requests.post(url, json=payload, headers=headers, timeout=60)
+        r = requests.post(url, json=payload, headers=_headers(token), timeout=120)
         data = r.json() if r.content else {}
 
         # Manejo de duplicados: código 0111 o mensaje "ya existe"
@@ -129,12 +135,13 @@ def enviar_comprobante(nombre: str, xml_firmado_b64: str, token: str) -> dict:
             raise MiPSEDuplicadoError(nombre)
 
         if not r.ok:
+            logger.error('mipse_envio_http_error', nombre=nombre, status=r.status_code, data=data)
             raise MiPSEError(f'MiPSE enviar HTTP {r.status_code}: {data}')
 
         # MiPSE puede responder 2xx pero con success=false (ej. SUNAT no responde)
         if data.get('success') is False:
             msg = data.get('mensaje') or data.get('message') or data.get('errores') or 'MiPSE reportó error sin CDR'
-            logger.warning('mipse_envio_sunat_error', nombre=nombre, data=data)
+            logger.warning('mipse_envio_sunat_error', nombre=nombre, status=r.status_code, data=data)
             raise MiPSEError(f'MiPSE no pudo entregar a SUNAT: {msg}')
 
         logger.info('mipse_envio_ok', nombre=nombre)
@@ -156,12 +163,11 @@ def consultar_estado(nombre: str, token: str) -> dict:
         dict: Resultado normalizado con cdr, estado, etc.
     """
     url = f'{_base_url()}/cpe/consultar/{nombre}'
-    headers = {'Authorization': f'Bearer {token}'}
     try:
-        r = requests.get(url, headers=headers, timeout=30)
+        r = requests.get(url, headers=_headers(token), timeout=30)
         r.raise_for_status()
         data = r.json()
-        logger.info('mipse_consulta_ok', nombre=nombre)
+        logger.info('mipse_consulta_ok', nombre=nombre, data=data)
         normalizado = _normalizar_respuesta(data)
         logger.info('mipse_consulta_normalizado', nombre=nombre, estado_sunat=normalizado.get('estado_sunat'), tiene_cdr=bool(normalizado.get('cdr')))
         return normalizado
@@ -205,13 +211,26 @@ def procesar_comprobante(comprobante) -> dict:
         # 3. Firmar
         xml_firmado_b64 = firmar_xml(nombre, xml_b64, token)
 
-        # 4. Enviar (con manejo de duplicados)
+        # 4. Enviar (con manejo de duplicados y recuperación por error SUNAT)
         resultado = None
         try:
             resultado = enviar_comprobante(nombre, xml_firmado_b64, token)
         except MiPSEDuplicadoError:
             log.warning('mipse_duplicado_recuperando')
             resultado = consultar_estado(nombre, token)
+        except MiPSEError as envio_err:
+            # Si MiPSE reporta que SUNAT no respondió, intentar consultar por si
+            # el comprobante SÍ fue registrado (race condition o timeout interno)
+            msg_err = str(envio_err).lower()
+            if any(kw in msg_err for kw in ('no pudo entregar', 'no responde', 'sunat')):
+                log.warning('mipse_envio_fallido_consultando', error=str(envio_err))
+                try:
+                    resultado = consultar_estado(nombre, token)
+                    log.info('mipse_recuperado_por_consulta', estado_sunat=resultado.get('estado_sunat'))
+                except MiPSEError:
+                    raise envio_err  # consultar también falló, propagar el error original
+            else:
+                raise
 
         # 5. Actualizar comprobante
         estado_sunat  = resultado.get('estado_sunat', '').upper()

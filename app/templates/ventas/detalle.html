@@ -247,6 +247,12 @@
           <i class="bi bi-cloud-upload"></i>Enviar a SUNAT
           {% endif %}
         </button>
+        {% if comprobante.estado == 'PENDIENTE' %}
+        <button onclick="consultarMipse({{ comprobante.id }})"
+                class="action-btn" style="cursor:pointer; width:100%; margin-top:0.35rem;">
+          <i class="bi bi-search"></i>Consultar en MiPSE
+        </button>
+        {% endif %}
         {% endif %}
 
         {% if comprobante.tipo_comprobante in ('FACTURA','BOLETA') and comprobante.estado in ('ENVIADO','ACEPTADO') %}
@@ -301,6 +307,24 @@ async function reenviarSunat(compId, estado) {
     const res = await afFetch(`/comprobantes/${compId}/reenviar`, { method: 'POST' });
     showToast(res.success ? 'SUNAT' : 'Error', res.message, res.success ? 'success' : 'danger');
     if (res.success) setTimeout(() => location.reload(), 1800);
+  } catch(e) { showToast('Error', e.message, 'danger'); }
+}
+
+async function consultarMipse(compId) {
+  const ok = await Swal.fire({
+    title: 'Consultar en MiPSE',
+    text: 'Consulta si SUNAT ya tiene registrado este comprobante (sin reenviarlo).',
+    icon: 'question', showCancelButton: true,
+    confirmButtonText: '<i class="bi bi-search"></i> Consultar',
+    confirmButtonColor: '#0d6efd',
+    background: 'var(--af-surface)', color: 'var(--af-text)',
+  });
+  if (!ok.isConfirmed) return;
+  try {
+    const res = await afFetch(`/comprobantes/${compId}/consultar-sunat`, { method: 'POST' });
+    const tipo = res.success ? (res.estado_bd === 'ACEPTADO' ? 'success' : 'info') : 'danger';
+    showToast('MiPSE', res.message, tipo);
+    if (res.success && res.estado_bd === 'ACEPTADO') setTimeout(() => location.reload(), 2000);
   } catch(e) { showToast('Error', e.message, 'danger'); }
 }
 </script>
