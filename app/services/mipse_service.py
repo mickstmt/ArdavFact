@@ -131,10 +131,15 @@ def enviar_comprobante(nombre: str, xml_firmado_b64: str, token: str) -> dict:
         if not r.ok:
             raise MiPSEError(f'MiPSE enviar HTTP {r.status_code}: {data}')
 
+        # MiPSE puede responder 2xx pero con success=false (ej. SUNAT no responde)
+        if data.get('success') is False:
+            msg = data.get('mensaje') or data.get('message') or data.get('errores') or 'MiPSE reportó error sin CDR'
+            logger.warning('mipse_envio_sunat_error', nombre=nombre, data=data)
+            raise MiPSEError(f'MiPSE no pudo entregar a SUNAT: {msg}')
+
         logger.info('mipse_envio_ok', nombre=nombre)
-        logger.warning('mipse_envio_raw_response', nombre=nombre, status=r.status_code, data=data)
         normalizado = _normalizar_respuesta(data)
-        logger.warning('mipse_envio_normalizado', nombre=nombre, estado_sunat=normalizado.get('estado_sunat'), codigo=normalizado.get('codigo'), tiene_cdr=bool(normalizado.get('cdr')))
+        logger.info('mipse_envio_normalizado', nombre=nombre, estado_sunat=normalizado.get('estado_sunat'), codigo=normalizado.get('codigo'), tiene_cdr=bool(normalizado.get('cdr')))
         return normalizado
 
     except MiPSEDuplicadoError:
@@ -157,9 +162,8 @@ def consultar_estado(nombre: str, token: str) -> dict:
         r.raise_for_status()
         data = r.json()
         logger.info('mipse_consulta_ok', nombre=nombre)
-        logger.warning('mipse_consulta_raw_response', nombre=nombre, data=data)
         normalizado = _normalizar_respuesta(data)
-        logger.warning('mipse_consulta_normalizado', nombre=nombre, estado_sunat=normalizado.get('estado_sunat'), tiene_cdr=bool(normalizado.get('cdr')))
+        logger.info('mipse_consulta_normalizado', nombre=nombre, estado_sunat=normalizado.get('estado_sunat'), tiene_cdr=bool(normalizado.get('cdr')))
         return normalizado
     except requests.RequestException as e:
         logger.error('mipse_consulta_error', nombre=nombre, error=str(e))
@@ -264,7 +268,6 @@ def _normalizar_respuesta(data: dict) -> dict:
     """
     inner = data.get('data') or data
 
-    logger.warning('mipse_normalizar_inner', keys=list(inner.keys()) if isinstance(inner, dict) else type(inner).__name__, inner=inner)
 
     # MiPSE usa estado numérico (200=ok) o string
     estado_raw = inner.get('estado') or inner.get('estadoSunat') or inner.get('estado_sunat') or ''

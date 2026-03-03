@@ -68,7 +68,7 @@ def _job_enviar_pendientes(app) -> None:
 
 
 def _enviar_pendientes() -> None:
-    """Busca comprobantes PENDIENTE y los envía a SUNAT."""
+    """Busca comprobantes PENDIENTE/ENVIADO y los envía/consulta en SUNAT."""
     from app.extensions import db
     from app.models.comprobante import Comprobante
     from app.services import mipse_service, file_service as file_svc
@@ -76,14 +76,14 @@ def _enviar_pendientes() -> None:
     logger.info('[SCHEDULER] Iniciando envío de pendientes (%s)', _ts())
 
     pendientes = Comprobante.query.filter(
-        Comprobante.estado.in_(('PENDIENTE',))
+        Comprobante.estado.in_(('PENDIENTE', 'ENVIADO'))
     ).order_by(Comprobante.fecha_emision).all()
 
     if not pendientes:
         logger.info('[SCHEDULER] Sin comprobantes pendientes.')
         return
 
-    logger.info('[SCHEDULER] %d comprobante(s) pendiente(s) encontrado(s).', len(pendientes))
+    logger.info('[SCHEDULER] %d comprobante(s) pendiente(s)/enviado(s) encontrado(s).', len(pendientes))
     fs = file_svc.get_file_service()
     enviados = errores = 0
 
