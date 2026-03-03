@@ -143,8 +143,17 @@ def _generar_invoice(comprobante) -> etree.Element:
         _cbc(root, 'DueDate', venc.strftime('%Y-%m-%d'))
 
     tipo_el = _cbc(root, 'InvoiceTypeCode', comprobante.tipo_documento_sunat)
+    tipo_el.set('listAgencyName', 'PE:SUNAT')
     tipo_el.set('listID', '0101')
-    _cbc(root, 'DocumentCurrencyCode', 'PEN')
+    tipo_el.set('listName', 'Tipo de Documento')
+    tipo_el.set('listSchemeURI', 'urn:pe:gob:sunat:cpe:see:gem:catalogos:catalogo51')
+    tipo_el.set('listURI', 'urn:pe:gob:sunat:cpe:see:gem:catalogos:catalogo01')
+    tipo_el.set('name', 'Tipo de Operacion')
+
+    curr_el = _cbc(root, 'DocumentCurrencyCode', 'PEN')
+    curr_el.set('listAgencyName', 'United Nations Economic Commission for Europe')
+    curr_el.set('listID', 'ISO 4217 Alpha')
+    curr_el.set('listName', 'Currency')
 
     # Número de orden (referencia WooCommerce)
     if comprobante.numero_orden:
@@ -259,17 +268,19 @@ def _add_order_reference(root: etree.Element, numero_orden: str):
 
 
 def _add_signature(root: etree.Element, cfg):
-    """Nodo Signature (se firna por MiPSE)."""
+    """Nodo Signature (se firma por MiPSE)."""
+    ruc = cfg.get('EMPRESA_RUC', '')
     sig = _cac(root, 'Signature')
-    _cbc(sig, 'ID', f"IDSignKG-{cfg.get('EMPRESA_RUC', '')}")
+    _cbc(sig, 'ID', ruc)
+    _cbc(sig, 'Note', 'Elaborado por Sistema de Emision Electronica Facturador SUNAT (SEE-SFS) 1.4')
     sp = _cac(sig, 'SignatoryParty')
     pi = _cac(sp,  'PartyIdentification')
-    _cbc(pi, 'ID', cfg.get('EMPRESA_RUC', ''))
+    _cbc(pi, 'ID', ruc)
     pn = _cac(sp, 'PartyName')
     _cbc(pn, 'Name', cfg.get('EMPRESA_RAZON_SOCIAL', ''))
     da = _cac(sig, 'DigitalSignatureAttachment')
     er = _cac(da, 'ExternalReference')
-    _cbc(er, 'URI', '#signatureKG')
+    _cbc(er, 'URI', 'SIGN')
 
 
 def _add_supplier_party(root: etree.Element, cfg):
@@ -279,29 +290,26 @@ def _add_supplier_party(root: etree.Element, cfg):
 
     pi = _cac(party, 'PartyIdentification')
     ruc_el = _cbc(pi, 'ID', cfg.get('EMPRESA_RUC', ''))
-    ruc_el.set('schemeID', '6')
-    ruc_el.set('schemeName', 'SUNAT:Identificador de Documento Tributario')
     ruc_el.set('schemeAgencyName', 'PE:SUNAT')
+    ruc_el.set('schemeID', '6')
+    ruc_el.set('schemeName', 'Documento de Identidad')
     ruc_el.set('schemeURI', 'urn:pe:gob:sunat:cpe:see:gem:catalogos:catalogo06')
 
     pn = _cac(party, 'PartyName')
     _cbc(pn, 'Name', cfg.get('EMPRESA_NOMBRE_COMERCIAL', cfg.get('EMPRESA_RAZON_SOCIAL', '')))
 
+    # PostalAddress directamente bajo Party (requerido por SUNAT, incluye ubigeo)
+    pa = _cac(party, 'PostalAddress')
+    _cbc(pa, 'ID', cfg.get('EMPRESA_UBIGEO', ''))
+    atc = _cbc(pa, 'AddressTypeCode', '0000')
+    atc.set('listAgencyName', 'PE:SUNAT')
+    atc.set('listName', 'Establecimientos anexos')
+    _cbc(pa, 'StreetName', cfg.get('EMPRESA_DIRECCION', ''))
+    country = _cac(pa, 'Country')
+    _cbc(country, 'IdentificationCode', 'PE')
+
     ple = _cac(party, 'PartyLegalEntity')
     _cbc(ple, 'RegistrationName', cfg.get('EMPRESA_RAZON_SOCIAL', ''))
-
-    if cfg.get('EMPRESA_DIRECCION'):
-        ra = _cac(ple, 'RegistrationAddress')
-        if cfg.get('EMPRESA_UBIGEO'):
-            _cbc(ra, 'ID', cfg.get('EMPRESA_UBIGEO', ''))
-        atc = _cbc(ra, 'AddressTypeCode', '0000')
-        atc.set('listAgencyName', 'PE:SUNAT')
-        _cbc(ra, 'StreetName', cfg.get('EMPRESA_DIRECCION', ''))
-        _cbc(ra, 'CitySubdivisionName', 'NONE')
-        _cbc(ra, 'CityName', 'LIMA')
-        _cbc(ra, 'CountrySubentity', 'LIMA')
-        country = _cac(ra, 'Country')
-        _cbc(country, 'IdentificationCode', 'PE')
 
 
 def _add_customer_party(root: etree.Element, cliente):
@@ -311,9 +319,9 @@ def _add_customer_party(root: etree.Element, cliente):
 
     pi = _cac(party, 'PartyIdentification')
     doc_el = _cbc(pi, 'ID', cliente.numero_documento)
-    doc_el.set('schemeID', cliente.codigo_tipo_documento_sunat)
-    doc_el.set('schemeName', 'SUNAT:Identificador de Documento Tributario')
     doc_el.set('schemeAgencyName', 'PE:SUNAT')
+    doc_el.set('schemeID', cliente.codigo_tipo_documento_sunat)
+    doc_el.set('schemeName', 'Documento de Identidad')
     doc_el.set('schemeURI', 'urn:pe:gob:sunat:cpe:see:gem:catalogos:catalogo06')
 
     ple = _cac(party, 'PartyLegalEntity')
@@ -363,11 +371,11 @@ def _add_tax_subtotal(parent: etree.Element, base: Decimal, igv: Decimal, afecta
     _amt(ts, 'TaxableAmount', base)
     _amt(ts, 'TaxAmount', igv)
     tc = _cac(ts, 'TaxCategory')
-    pct = '18.00' if afectacion in ('10', '11') else '0.00'
-    _cbc(tc, 'Percent', pct)
-    _cbc(tc, 'TaxExemptionReasonCode', exemption_code)
     tscheme = _cac(tc, 'TaxScheme')
-    _cbc(tscheme, 'ID', tax_code)
+    tid = _cbc(tscheme, 'ID', tax_code)
+    tid.set('schemeAgencyName', 'PE:SUNAT')
+    tid.set('schemeID', 'UN/ECE 5153')
+    tid.set('schemeName', 'Codigo de tributos')
     _cbc(tscheme, 'Name', tax_name)
     _cbc(tscheme, 'TaxTypeCode', tax_type)
 
@@ -404,6 +412,8 @@ def _add_invoice_line(root: etree.Element, item, idx: int):
 
     qty_el = _cbc(line, 'InvoicedQuantity', _fmt(item.cantidad))
     qty_el.set('unitCode', item.unidad_medida or 'NIU')
+    qty_el.set('unitCodeListAgencyName', 'United Nations Economic Commission for Europe')
+    qty_el.set('unitCodeListID', 'UN/ECE rec 20')
 
     _amt(line, 'LineExtensionAmount', _d(item.subtotal_sin_igv))
     _add_pricing_reference(line, item)
@@ -420,6 +430,8 @@ def _add_credit_note_line(root: etree.Element, item, idx: int):
 
     qty_el = _cbc(line, 'CreditedQuantity', _fmt(item.cantidad))
     qty_el.set('unitCode', item.unidad_medida or 'NIU')
+    qty_el.set('unitCodeListAgencyName', 'United Nations Economic Commission for Europe')
+    qty_el.set('unitCodeListID', 'UN/ECE rec 20')
 
     _amt(line, 'LineExtensionAmount', _d(item.subtotal_sin_igv))
     _add_pricing_reference(line, item)
@@ -436,6 +448,8 @@ def _add_debit_note_line(root: etree.Element, item, idx: int):
 
     qty_el = _cbc(line, 'DebitedQuantity', _fmt(item.cantidad))
     qty_el.set('unitCode', item.unidad_medida or 'NIU')
+    qty_el.set('unitCodeListAgencyName', 'United Nations Economic Commission for Europe')
+    qty_el.set('unitCodeListID', 'UN/ECE rec 20')
 
     _amt(line, 'LineExtensionAmount', _d(item.subtotal_sin_igv))
     _add_pricing_reference(line, item)
@@ -450,7 +464,10 @@ def _add_pricing_reference(line: etree.Element, item):
     pr = _cac(line, 'PricingReference')
     acp = _cac(pr, 'AlternativeConditionPrice')
     _amt(acp, 'PriceAmount', _d(item.precio_unitario_con_igv))
-    _cbc(acp, 'PriceTypeCode', '01')  # 01 = precio unitario (incluye impuesto)
+    ptc = _cbc(acp, 'PriceTypeCode', '01')  # 01 = precio unitario (incluye impuesto)
+    ptc.set('listAgencyName', 'PE:SUNAT')
+    ptc.set('listName', 'Tipo de Precio')
+    ptc.set('listURI', 'urn:pe:gob:sunat:cpe:see:gem:catalogos:catalogo16')
 
 
 def _add_item_tax_total(line: etree.Element, item):
@@ -468,9 +485,15 @@ def _add_item_tax_total(line: etree.Element, item):
     tc = _cac(ts, 'TaxCategory')
     pct = '18.00' if afectacion in ('10', '11') else '0.00'
     _cbc(tc, 'Percent', pct)
-    _cbc(tc, 'TaxExemptionReasonCode', exemption_code)
+    erc = _cbc(tc, 'TaxExemptionReasonCode', exemption_code)
+    erc.set('listAgencyName', 'PE:SUNAT')
+    erc.set('listName', 'Afectacion del IGV')
+    erc.set('listURI', 'urn:pe:gob:sunat:cpe:see:gem:catalogos:catalogo07')
     tscheme = _cac(tc, 'TaxScheme')
-    _cbc(tscheme, 'ID', tax_code)
+    tid = _cbc(tscheme, 'ID', tax_code)
+    tid.set('schemeAgencyName', 'PE:SUNAT')
+    tid.set('schemeID', 'UN/ECE 5153')
+    tid.set('schemeName', 'Codigo de tributos')
     _cbc(tscheme, 'Name', tax_name)
     _cbc(tscheme, 'TaxTypeCode', tax_type)
 
