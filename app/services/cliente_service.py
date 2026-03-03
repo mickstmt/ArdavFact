@@ -139,7 +139,10 @@ def guardar_cliente_desde_dict(datos: dict) -> Cliente:
 
     for campo, valor in datos.items():
         if hasattr(cliente, campo):
-            setattr(cliente, campo, valor)
+            try:
+                setattr(cliente, campo, valor)
+            except AttributeError:
+                pass  # ignorar @property de solo lectura (ej. nombre_completo)
 
     db.session.flush()
     return cliente
