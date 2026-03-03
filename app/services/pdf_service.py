@@ -104,11 +104,19 @@ def generar_pdf(comprobante) -> bytes:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _seccion_encabezado(comp, cfg, styles) -> list:
-    """Encabezado: empresa a la izquierda, número de comprobante a la derecha."""
+    """Encabezado: logo + empresa a la izquierda, número de comprobante a la derecha."""
+    import os
     titulo = _TIPOS_TITULO.get(comp.tipo_comprobante, comp.tipo_comprobante)
 
-    # Datos empresa (columna izq)
-    empresa_lines = [
+    # Logo (opcional) + datos empresa (columna izq)
+    empresa_lines = []
+
+    logo_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'static', 'img', 'logo.png')
+    if os.path.exists(logo_path):
+        empresa_lines.append(Image(logo_path, width=40 * mm, height=20 * mm, kind='proportional'))
+        empresa_lines.append(Spacer(1, 2 * mm))
+
+    empresa_lines += [
         Paragraph(cfg.get('EMPRESA_RAZON_SOCIAL', ''), styles['empresa_nombre']),
         Paragraph(f"RUC: {cfg.get('EMPRESA_RUC', '')}", styles['empresa_dato']),
     ]
@@ -204,9 +212,24 @@ def _seccion_items(comp, styles) -> list:
             f'S/ {_fmt(item.subtotal_con_igv)}',
         ])
 
+    # Costo de envío como ítem adicional
+    if comp.costo_envio and comp.costo_envio > 0:
+        from decimal import Decimal, ROUND_HALF_UP
+        envio_total = Decimal(str(comp.costo_envio))
+        envio_sin_igv = (envio_total / Decimal('1.18')).quantize(Decimal('0.01'), ROUND_HALF_UP)
+        envio_igv = (envio_total - envio_sin_igv).quantize(Decimal('0.01'), ROUND_HALF_UP)
+        filas.append([
+            '—',
+            'Costo de envío',
+            '1',
+            f'S/ {_fmt(envio_sin_igv)}',
+            f'S/ {_fmt(envio_igv)}',
+            f'S/ {_fmt(envio_total)}',
+        ])
+
     col_w = [8 * mm, 82 * mm, 18 * mm, 28 * mm, 22 * mm, 25 * mm]
     tabla = Table(filas, colWidths=col_w, repeatRows=1)
-    tabla.setStyle(TableStyle([
+    style_cmds = [
         # Encabezado
         ('BACKGROUND',    (0, 0), (-1, 0), _AZUL),
         ('TEXTCOLOR',     (0, 0), (-1, 0), colors.white),
@@ -227,7 +250,16 @@ def _seccion_items(comp, styles) -> list:
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         # Bordes
         ('GRID', (0, 0), (-1, -1), 0.3, colors.HexColor('#e5e7eb')),
-    ]))
+    ]
+    # Fila de envío: fondo y texto diferenciado
+    if comp.costo_envio and comp.costo_envio > 0:
+        fila_envio = len(filas) - 1
+        style_cmds += [
+            ('BACKGROUND', (0, fila_envio), (-1, fila_envio), colors.HexColor('#eff6ff')),
+            ('FONT',       (1, fila_envio), (1, fila_envio), 'Helvetica-Oblique', 8),
+            ('TEXTCOLOR',  (0, fila_envio), (-1, fila_envio), _AZUL),
+        ]
+    tabla.setStyle(TableStyle(style_cmds))
     return [tabla]
 
 
