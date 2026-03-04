@@ -97,12 +97,30 @@ def crear_venta():
         db.session.add(comprobante)
         db.session.flush()
 
+        # ── Calcular totales bruto para prorrateo de descuento ──
+        total_items_bruto = sum(Decimal(str(it['precio_con_igv'])) * Decimal(str(it['cantidad'])) for it in items_datos)
+        descuento_restante = descuento
+
         # ── Crear ítems ──
         items_obj = []
-        for it in items_datos:
-            precio_con_igv  = Decimal(str(it['precio_con_igv']))
-            cantidad        = Decimal(str(it['cantidad']))
+        for index, it in enumerate(items_datos):
+            precio_con_igv_original = Decimal(str(it['precio_con_igv']))
+            cantidad = Decimal(str(it['cantidad']))
             tipo_afectacion = it.get('tipo_afectacion_igv', '10')
+
+            # ── Prorratear descuento ──
+            descuento_item = Decimal('0')
+            if descuento > 0 and total_items_bruto > 0:
+                if index == len(items_datos) - 1:
+                    # Último ítem asume el remanente del descuento por redondeo
+                    descuento_item = descuento_restante
+                else:
+                    porcion = ((precio_con_igv_original * cantidad) / total_items_bruto) * descuento
+                    descuento_item = porcion.quantize(Decimal('0.01'))
+                    descuento_restante -= descuento_item
+
+            descuento_unitario = (descuento_item / cantidad) if cantidad > 0 else Decimal('0')
+            precio_con_igv = precio_con_igv_original - descuento_unitario
 
             calc = calcular_igv_item(precio_con_igv, cantidad, tipo_afectacion)
 
@@ -128,7 +146,9 @@ def crear_venta():
         db.session.flush()
 
         # ── Calcular totales del comprobante ──
-        totales = calcular_totales_comprobante(items_obj, costo_envio, descuento)
+        # El descuento ya está aplicado en los precios de los ítems, por lo que a la 
+        # función de utilidades le enviamos descuento=0 para que no lo reste 2 veces.
+        totales = calcular_totales_comprobante(items_obj, costo_envio, Decimal('0'))
         comprobante.subtotal = sum(i.subtotal_con_igv for i in items_obj)
         comprobante.total_operaciones_gravadas   = totales['total_gravadas']
         comprobante.total_operaciones_exoneradas = totales['total_exoneradas']

@@ -162,7 +162,6 @@ def _generar_invoice(comprobante) -> etree.Element:
     _add_signature(root, cfg)
     _add_supplier_party(root, cfg)
     _add_customer_party(root, cliente)
-    _add_allowance_charge(root, comprobante)
     _add_tax_total(root, comprobante)
     _add_legal_monetary_total(root, comprobante)
 
@@ -203,7 +202,6 @@ def _generar_credit_note(comprobante) -> etree.Element:
     _add_signature(root, cfg)
     _add_supplier_party(root, cfg)
     _add_customer_party(root, cliente)
-    _add_allowance_charge(root, comprobante)
     _add_tax_total(root, comprobante)
     _add_legal_monetary_total(root, comprobante)
 
@@ -244,7 +242,6 @@ def _generar_debit_note(comprobante) -> etree.Element:
     _add_signature(root, cfg)
     _add_supplier_party(root, cfg)
     _add_customer_party(root, cliente)
-    _add_allowance_charge(root, comprobante)
     _add_tax_total(root, comprobante)
     _add_legal_monetary_total(root, comprobante)
 
@@ -412,12 +409,7 @@ def _add_tax_subtotal(parent: etree.Element, base: Decimal, igv: Decimal, afecta
 
 
 def _add_legal_monetary_total(root: etree.Element, comprobante):
-    """LegalMonetaryTotal — totales monetarios finales.
-
-    SUNAT 3279: TaxInclusiveAmount = LineExtensionAmount + TaxTotal (total bruto).
-    SUNAT 3300: AllowanceTotalAmount omitido (opcional, evita conflictos).
-    El descuento se refleja solo en PayableAmount (total final al cliente).
-    """
+    """LegalMonetaryTotal — totales monetarios finales."""
     lmt = _cac(root, 'LegalMonetaryTotal')
     gravadas   = _d(comprobante.total_operaciones_gravadas)
     exoneradas = _d(comprobante.total_operaciones_exoneradas)
@@ -429,7 +421,6 @@ def _add_legal_monetary_total(root: etree.Element, comprobante):
     total_bruto = (line_ext + igv).quantize(Decimal('0.01'))
 
     _amt(lmt, 'LineExtensionAmount', line_ext)
-    # TaxInclusiveAmount = LineExtensionAmount + TaxTotal (requerido por SUNAT 3279)
     _amt(lmt, 'TaxInclusiveAmount', total_bruto)
 
     # Cargos (envío gravado)
@@ -438,7 +429,6 @@ def _add_legal_monetary_total(root: etree.Element, comprobante):
         envio_sin_igv = (envio / Decimal('1.18')).quantize(Decimal('0.01'), ROUND_HALF_UP)
         _amt(lmt, 'ChargeTotalAmount', envio_sin_igv)
 
-    # PayableAmount = total final después del descuento global
     _amt(lmt, 'PayableAmount', total)
 
 
