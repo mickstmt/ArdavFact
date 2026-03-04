@@ -111,7 +111,7 @@ def _seccion_encabezado(comp, cfg, styles) -> list:
     # Logo (opcional) + datos empresa (columna izq)
     empresa_lines = []
 
-    logo_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'static', 'img', 'logo.png')
+    logo_path = os.path.join(current_app.root_path, 'static', 'img', 'logo.png')
     if os.path.exists(logo_path):
         try:
             from PIL import Image as PILImage
@@ -123,12 +123,14 @@ def _seccion_encabezado(comp, cfg, styles) -> list:
                 pil_img = bg
             elif pil_img.mode != 'RGB':
                 pil_img = pil_img.convert('RGB')
-            logo_buf = io.BytesIO()
-            pil_img.save(logo_buf, format='PNG')
-            logo_buf.seek(0)
-            empresa_lines.append(Image(logo_buf, width=40 * mm, height=20 * mm, kind='proportional'))
-        except Exception:
-            empresa_lines.append(Image(logo_path, width=40 * mm, height=20 * mm, kind='proportional'))
+            # Guardar en archivo temporal — BytesIO puede fallar en ReportLab
+            import tempfile
+            with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp:
+                tmp_path = tmp.name
+                pil_img.save(tmp_path, format='PNG')
+            empresa_lines.append(Image(tmp_path, width=40 * mm, height=20 * mm, kind='proportional'))
+        except Exception as e:
+            current_app.logger.warning(f'[PDF] Logo no renderizado: {e}')
         empresa_lines.append(Spacer(1, 2 * mm))
 
     empresa_lines += [
