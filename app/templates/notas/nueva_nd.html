@@ -188,7 +188,7 @@ async function emitirND() {
       },
     });
     if (res.success) {
-      showToast('ND emitida', `${res.numero} — ${res.estado}`, 'success');
+      showToast('ND emitida', `${res.numero} — ${res.estado}`, res.sunat_ok ? 'success' : 'danger');
       setTimeout(() => window.location.href = `/ventas/${res.comprobante_id}`, 1500);
     } else {
       showToast('Error', res.message, 'danger');

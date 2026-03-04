@@ -120,12 +120,22 @@ def crear_nc():
             file_svc.get_file_service().guardar_archivos(nc, resultado)
         db.session.commit()
 
+        sunat_aceptado = nc.estado == 'ACEPTADO'
+        if not resultado['success']:
+            msg = f'NC {nc.numero_completo} guardada como PENDIENTE. Error SUNAT: {resultado["mensaje_sunat"]}'
+        elif sunat_aceptado:
+            msg = f'NC {nc.numero_completo} emitida y ACEPTADA por SUNAT.'
+        else:
+            msg = f'NC {nc.numero_completo} RECHAZADA por SUNAT. {resultado.get("mensaje_sunat", "")}'
+
         return jsonify({
             'success': True,
-            'message': f'NC {nc.numero_completo} creada. Estado: {nc.estado}.',
+            'message': msg,
             'comprobante_id': nc.id,
             'numero': nc.numero_completo,
             'estado': nc.estado,
+            'sunat_ok': sunat_aceptado,
+            'sunat_mensaje': resultado.get('mensaje_sunat', ''),
         })
 
     except Exception as e:
@@ -237,12 +247,22 @@ def crear_nd():
             file_svc.get_file_service().guardar_archivos(nd, resultado)
         db.session.commit()
 
+        sunat_aceptado = nd.estado == 'ACEPTADO'
+        if not resultado['success']:
+            msg = f'ND {nd.numero_completo} guardada como PENDIENTE. Error SUNAT: {resultado["mensaje_sunat"]}'
+        elif sunat_aceptado:
+            msg = f'ND {nd.numero_completo} emitida y ACEPTADA por SUNAT.'
+        else:
+            msg = f'ND {nd.numero_completo} RECHAZADA por SUNAT. {resultado.get("mensaje_sunat", "")}'
+
         return jsonify({
             'success': True,
-            'message': f'ND {nd.numero_completo} creada. Estado: {nd.estado}.',
+            'message': msg,
             'comprobante_id': nd.id,
             'numero': nd.numero_completo,
             'estado': nd.estado,
+            'sunat_ok': sunat_aceptado,
+            'sunat_mensaje': resultado.get('mensaje_sunat', ''),
         })
 
     except Exception as e:
