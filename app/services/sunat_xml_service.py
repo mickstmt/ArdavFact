@@ -354,10 +354,10 @@ def _add_allowance_charge(root: etree.Element, comprobante):
     descuento = _d(comprobante.descuento)
     if descuento <= Decimal('0'):
         return
+    # descuento es el monto total con IGV; Amount va sin IGV (base del descuento)
     descuento_sin_igv = (descuento / Decimal('1.18')).quantize(Decimal('0.01'), ROUND_HALF_UP)
-    gravadas_originales = (
-        _d(comprobante.total_operaciones_gravadas) + descuento_sin_igv
-    )
+    # total_operaciones_gravadas ya tiene el valor original (sin restar descuento)
+    gravadas_originales = _d(comprobante.total_operaciones_gravadas)
     ac = _cac(root, 'AllowanceCharge')
     _cbc(ac, 'ChargeIndicator', 'false')
     rc = _cbc(ac, 'AllowanceChargeReasonCode', '00')
@@ -415,19 +415,15 @@ def _add_legal_monetary_total(root: etree.Element, comprobante):
     inafectas  = _d(comprobante.total_operaciones_inafectas)
     total      = _d(comprobante.total)
 
-    # Descuento: gravadas ya tiene el descuento restado; reconstruir base original
-    descuento = _d(comprobante.descuento)
-    descuento_sin_igv = Decimal('0')
-    if descuento > Decimal('0'):
-        descuento_sin_igv = (descuento / Decimal('1.18')).quantize(Decimal('0.01'), ROUND_HALF_UP)
-
-    # LineExtensionAmount = suma original de líneas (sin descontar)
-    line_ext = gravadas + descuento_sin_igv + exoneradas + inafectas
+    # gravadas ya contiene el valor original (sin restar descuento)
+    line_ext = gravadas + exoneradas + inafectas
     _amt(lmt, 'LineExtensionAmount', line_ext)
     _amt(lmt, 'TaxInclusiveAmount', total)
 
-    # Descuento global
-    if descuento_sin_igv > Decimal('0'):
+    # Descuento global (AllowanceTotalAmount = monto sin IGV, informativo)
+    descuento = _d(comprobante.descuento)
+    if descuento > Decimal('0'):
+        descuento_sin_igv = (descuento / Decimal('1.18')).quantize(Decimal('0.01'), ROUND_HALF_UP)
         _amt(lmt, 'AllowanceTotalAmount', descuento_sin_igv)
 
     # Cargos (envío gravado)

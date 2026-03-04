@@ -53,7 +53,10 @@ def calcular_totales_comprobante(
     """
     Calcula los totales tributarios del comprobante a partir de sus ítems.
     El envío siempre se trata como operación gravada.
-    El descuento (con IGV incluido) se aplica solo sobre ítems gravados.
+
+    El descuento es un descuento global post-impuesto (se resta solo del total
+    final). Las bases gravadas e IGV se almacenan en sus valores originales para
+    que coincidan con la sumatoria de líneas en el XML (evita error SUNAT 3277).
     """
     costo_envio = Decimal(str(costo_envio))
     descuento   = Decimal(str(descuento))
@@ -64,29 +67,27 @@ def calcular_totales_comprobante(
     total_inafectas  = sum((Decimal(str(i.subtotal_sin_igv)) for i in items if i.tipo_afectacion_igv == '30'), _D0)
     total_igv        = sum((Decimal(str(i.igv_total)) for i in items if i.tipo_afectacion_igv == '10'), _D0)
 
-    # Descuento sobre productos gravados (el usuario ingresa monto con IGV)
-    descuento_sin_igv = _D0
-    if descuento > _D0:
-        descuento_sin_igv = (descuento / IGV_DIVISOR).quantize(Decimal('0.01'), ROUND_HALF_UP)
-        igv_descuento     = (descuento - descuento_sin_igv).quantize(Decimal('0.01'), ROUND_HALF_UP)
-        total_gravadas   -= descuento_sin_igv
-        total_igv        -= igv_descuento
-
     if costo_envio > 0:
         envio_sin_igv = (costo_envio / IGV_DIVISOR).quantize(Decimal('0.01'), ROUND_HALF_UP)
         igv_envio = (costo_envio - envio_sin_igv).quantize(Decimal('0.01'), ROUND_HALF_UP)
         total_gravadas += envio_sin_igv
         total_igv += igv_envio
 
-    total = total_gravadas + total_exoneradas + total_inafectas + total_igv
+    # El descuento reduce solo el total final (PayableAmount en UBL).
+    # total_gravadas y total_igv mantienen sus valores originales para
+    # que TaxSubtotal/TaxableAmount coincida con la suma de líneas.
+    total_bruto = total_gravadas + total_exoneradas + total_inafectas + total_igv
+    total = total_bruto - descuento
+
+    descuento_sin_igv = (descuento / IGV_DIVISOR).quantize(Decimal('0.01'), ROUND_HALF_UP) if descuento > _D0 else _D0
 
     return {
-        'total_gravadas':   total_gravadas.quantize(Decimal('0.01')),
-        'total_exoneradas': total_exoneradas.quantize(Decimal('0.01')),
-        'total_inafectas':  total_inafectas.quantize(Decimal('0.01')),
-        'total_igv':        total_igv.quantize(Decimal('0.01')),
-        'total':            total.quantize(Decimal('0.01')),
-        'descuento_sin_igv': descuento_sin_igv.quantize(Decimal('0.01')),
+        'total_gravadas':    total_gravadas.quantize(Decimal('0.01')),
+        'total_exoneradas':  total_exoneradas.quantize(Decimal('0.01')),
+        'total_inafectas':   total_inafectas.quantize(Decimal('0.01')),
+        'total_igv':         total_igv.quantize(Decimal('0.01')),
+        'total':             total.quantize(Decimal('0.01')),
+        'descuento_sin_igv': descuento_sin_igv,
     }
 
 
