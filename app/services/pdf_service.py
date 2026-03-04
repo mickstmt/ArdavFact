@@ -104,18 +104,23 @@ def generar_pdf(comprobante) -> bytes:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _seccion_encabezado(comp, cfg, styles) -> list:
-    """Encabezado: logo + empresa a la izquierda, número de comprobante a la derecha."""
+    """Encabezado: logo + empresa a la izquierda, número de comprobante a la derecha.
+
+    IMPORTANTE: el Image debe ser celda directa de tabla, no dentro de una lista.
+    ReportLab no renderiza correctamente Image cuando está anidado en list-cell.
+    """
     import os
     titulo = _TIPOS_TITULO.get(comp.tipo_comprobante, comp.tipo_comprobante)
 
-    # Logo (opcional) + datos empresa (columna izq)
-    empresa_lines = []
-
+    # ── Logo ──
+    logo_img = None
     logo_path = os.path.join(current_app.root_path, 'static', 'img', 'logo.png')
     if os.path.exists(logo_path):
         try:
             from PIL import Image as PILImage
+            import tempfile
             pil_img = PILImage.open(logo_path)
+            img_w, img_h = pil_img.size
             if pil_img.mode in ('RGBA', 'LA', 'P'):
                 bg = PILImage.new('RGB', pil_img.size, (255, 255, 255))
                 mask = pil_img.split()[-1] if pil_img.mode in ('RGBA', 'LA') else None
@@ -123,48 +128,67 @@ def _seccion_encabezado(comp, cfg, styles) -> list:
                 pil_img = bg
             elif pil_img.mode != 'RGB':
                 pil_img = pil_img.convert('RGB')
-            # Guardar en archivo temporal — BytesIO puede fallar en ReportLab
-            import tempfile
             with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp:
                 tmp_path = tmp.name
                 pil_img.save(tmp_path, format='PNG')
-            empresa_lines.append(Image(tmp_path, width=40 * mm, height=20 * mm, kind='proportional'))
+            # Mantener proporción dentro de 40x25mm
+            max_w, max_h = 40 * mm, 25 * mm
+            aspect = img_h / img_w
+            if max_w * aspect <= max_h:
+                final_w, final_h = max_w, max_w * aspect
+            else:
+                final_h, final_w = max_h, max_h / aspect
+            logo_img = Image(tmp_path, width=final_w, height=final_h)
         except Exception as e:
             current_app.logger.warning(f'[PDF] Logo no renderizado: {e}')
-        empresa_lines.append(Spacer(1, 2 * mm))
 
-    empresa_lines += [
-        Paragraph(cfg.get('EMPRESA_RAZON_SOCIAL', ''), styles['empresa_nombre']),
-        Paragraph(f"RUC: {cfg.get('EMPRESA_RUC', '')}", styles['empresa_dato']),
+    # ── Datos empresa (nested table — sin logo) ──
+    emp_rows = [
+        [Paragraph(cfg.get('EMPRESA_RAZON_SOCIAL', ''), styles['empresa_nombre'])],
+        [Paragraph(f"RUC: {cfg.get('EMPRESA_RUC', '')}", styles['empresa_dato'])],
     ]
     if cfg.get('EMPRESA_DIRECCION'):
-        empresa_lines.append(Paragraph(cfg['EMPRESA_DIRECCION'], styles['empresa_dato']))
+        emp_rows.append([Paragraph(cfg['EMPRESA_DIRECCION'], styles['empresa_dato'])])
     if cfg.get('EMPRESA_TELEFONO'):
-        empresa_lines.append(Paragraph(f"Tel: {cfg['EMPRESA_TELEFONO']}", styles['empresa_dato']))
+        emp_rows.append([Paragraph(f"Tel: {cfg['EMPRESA_TELEFONO']}", styles['empresa_dato'])])
     if cfg.get('EMPRESA_EMAIL'):
-        empresa_lines.append(Paragraph(cfg['EMPRESA_EMAIL'], styles['empresa_dato']))
+        emp_rows.append([Paragraph(cfg['EMPRESA_EMAIL'], styles['empresa_dato'])])
+    empresa_tabla = Table(emp_rows, colWidths=[65 * mm])
+    empresa_tabla.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('TOPPADDING', (0, 0), (-1, -1), 1),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
+    ]))
 
-    # Bloque número (columna der)
+    # ── Bloque número (columna derecha) ──
     numero_lines = [
         Paragraph(titulo, styles['comp_titulo']),
         Paragraph(comp.numero_sunat, styles['comp_numero']),
+        Paragraph(f'Fecha: {comp.fecha_emision.strftime("%d/%m/%Y")}', styles['comp_dato']),
     ]
-    fecha_str = comp.fecha_emision.strftime('%d/%m/%Y')
-    numero_lines.append(Paragraph(f'Fecha: {fecha_str}', styles['comp_dato']))
     if comp.numero_orden:
         numero_lines.append(Paragraph(f'Orden: {comp.numero_orden}', styles['comp_dato']))
 
-    tabla = Table(
-        [[empresa_lines, numero_lines]],
-        colWidths=[110 * mm, 65 * mm],
-    )
+    # ── Construir tabla principal ──
+    # Con logo: [logo | empresa_tabla | bloque_numero]
+    # Sin logo: [empresa_tabla       | bloque_numero]
+    if logo_img:
+        row = [logo_img, empresa_tabla, numero_lines]
+        col_widths = [45 * mm, 65 * mm, 65 * mm]
+        idx_num = 2
+    else:
+        row = [empresa_tabla, numero_lines]
+        col_widths = [110 * mm, 65 * mm]
+        idx_num = 1
+
+    tabla = Table([row], colWidths=col_widths)
     tabla.setStyle(TableStyle([
-        ('VALIGN',  (0, 0), (-1, -1), 'TOP'),
-        ('ALIGN',   (1, 0), (1, 0), 'CENTER'),
-        ('BOX',     (1, 0), (1, 0), 1, _AZUL),
-        ('BACKGROUND', (1, 0), (1, 0), colors.HexColor('#eff6ff')),
-        ('TOPPADDING',  (1, 0), (1, 0), 8),
-        ('BOTTOMPADDING', (1, 0), (1, 0), 8),
+        ('VALIGN',      (0, 0), (-1, -1), 'TOP'),
+        ('ALIGN',       (idx_num, 0), (idx_num, 0), 'CENTER'),
+        ('BOX',         (idx_num, 0), (idx_num, 0), 1, _AZUL),
+        ('BACKGROUND',  (idx_num, 0), (idx_num, 0), colors.HexColor('#eff6ff')),
+        ('TOPPADDING',    (idx_num, 0), (idx_num, 0), 8),
+        ('BOTTOMPADDING', (idx_num, 0), (idx_num, 0), 8),
     ]))
     return [tabla, HRFlowable(width='100%', thickness=1.5, color=_AZUL, spaceAfter=0)]
 
