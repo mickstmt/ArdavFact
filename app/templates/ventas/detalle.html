@@ -139,6 +139,7 @@
         <i class="bi bi-list-ul me-1"></i>Ítems ({{ comprobante.items|length }})
       </div>
       <div style="overflow-x:auto;">
+        {% set total_dsctos = comprobante.items|sum(attribute='descuento') %}
         <table class="table items-table mb-0">
           <thead>
             <tr>
@@ -147,6 +148,7 @@
               <th>SKU</th>
               <th class="text-center">Cant.</th>
               <th class="text-end">P.Unit. (sin IGV)</th>
+              {% if total_dsctos > 0 %}<th class="text-end" style="color:#d63384;">Dscto.</th>{% endif %}
               <th class="text-end">IGV</th>
               <th class="text-end">Subtotal</th>
             </tr>
@@ -166,6 +168,7 @@
               <td style="color:var(--af-text-muted);">{{ item.producto_sku or '—' }}</td>
               <td class="text-center">{{ '%.0f'|format(item.cantidad) }}</td>
               <td class="text-end">S/ {{ '%.2f'|format(item.precio_unitario_sin_igv) }}</td>
+              {% if total_dsctos > 0 %}<td class="text-end" style="color:#d63384;">{% if item.descuento > 0 %}- S/ {{ '%.2f'|format(item.descuento) }}{% else %}—{% endif %}</td>{% endif %}
               <td class="text-end" style="color:var(--af-text-muted);">S/ {{ '%.2f'|format(item.igv_unitario) }}</td>
               <td class="text-end fw-semibold">S/ {{ '%.2f'|format(item.subtotal_con_igv) }}</td>
             </tr>

@@ -130,6 +130,7 @@ def crear_venta():
                 producto_sku=it.get('sku', ''),
                 cantidad=cantidad,
                 unidad_medida=it.get('unidad_medida', 'NIU'),
+                descuento=descuento_item,
                 precio_unitario_con_igv=precio_con_igv,
                 precio_unitario_sin_igv=calc['precio_sin_igv'],
                 igv_unitario=calc['igv_unitario'],

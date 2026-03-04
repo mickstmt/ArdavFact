@@ -107,6 +107,7 @@ class ComprobanteItem(db.Model):
     producto_sku    = db.Column(db.String(100), nullable=True)
     cantidad        = db.Column(db.Numeric(12, 2), nullable=False)
     unidad_medida   = db.Column(db.String(5), default='NIU')  # NIU=unidad, ZZ=servicio
+    descuento       = db.Column(db.Numeric(12, 2), nullable=False, default=0)
 
     # === Precios ===
     precio_unitario_con_igv = db.Column(db.Numeric(12, 2), nullable=False)  # Lo que paga el cliente

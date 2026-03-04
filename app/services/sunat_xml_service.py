@@ -162,6 +162,7 @@ def _generar_invoice(comprobante) -> etree.Element:
     _add_signature(root, cfg)
     _add_supplier_party(root, cfg)
     _add_customer_party(root, cliente)
+    _add_payment_terms(root, comprobante)
     _add_tax_total(root, comprobante)
     _add_legal_monetary_total(root, comprobante)
 
@@ -368,6 +369,27 @@ def _add_allowance_charge(root: etree.Element, comprobante):
     _cbc(ac, 'AllowanceChargeReason', 'Descuento Global')
     _amt(ac, 'Amount', descuento)
     _amt(ac, 'BaseAmount', total_bruto)
+
+
+def _add_payment_terms(root: etree.Element, comprobante):
+    """PaymentTerms — Indica si es al Contado o Crédito (Requerido SUNAT 3244)."""
+    es_credito = (
+        comprobante.tipo_comprobante == 'FACTURA' and
+        comprobante.fecha_vencimiento and
+        comprobante.fecha_vencimiento.date() > comprobante.fecha_emision.date()
+    )
+
+    pt = _cac(root, 'PaymentTerms')
+    _cbc(pt, 'ID', 'Credito' if es_credito else 'FormaPago')
+    _cbc(pt, 'PaymentMeansID', 'Credito' if es_credito else 'Contado')
+    _amt(pt, 'Amount', _d(comprobante.total))
+
+    if es_credito:
+        pt2 = _cac(root, 'PaymentTerms')
+        _cbc(pt2, 'ID', 'FormaPago')
+        _cbc(pt2, 'PaymentMeansID', 'Cuota001')
+        _amt(pt2, 'Amount', _d(comprobante.total))
+        _cbc(pt2, 'PaymentDueDate', comprobante.fecha_vencimiento.strftime('%Y-%m-%d'))
 
 
 def _add_tax_total(root: etree.Element, comprobante):
