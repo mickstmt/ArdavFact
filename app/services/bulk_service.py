@@ -282,10 +282,11 @@ def procesar_ordenes(
 
 
 def _siguiente_correlativo(serie: str) -> int:
-    """Retorna el siguiente número correlativo para una serie."""
+    """Retorna el siguiente número correlativo para una serie (con lock de fila)."""
     ultimo = (
         db.session.query(db.func.max(db.cast(Comprobante.correlativo, db.Integer)))
         .filter(Comprobante.serie == serie)
+        .with_for_update()
         .scalar()
     )
     return (ultimo or 0) + 1

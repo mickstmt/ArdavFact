@@ -259,10 +259,11 @@ def detalle_venta(comp_id: int):
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _siguiente_correlativo(serie: str) -> int:
-    """Obtiene el siguiente correlativo para una serie dada."""
+    """Obtiene el siguiente correlativo para una serie dada (con lock de fila)."""
     ultimo = (
         db.session.query(db.func.max(db.cast(Comprobante.correlativo, db.Integer)))
         .filter_by(serie=serie)
+        .with_for_update()
         .scalar()
     )
     return (ultimo or 0) + 1
