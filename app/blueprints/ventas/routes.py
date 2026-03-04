@@ -261,11 +261,15 @@ def detalle_venta(comp_id: int):
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _siguiente_correlativo(serie: str) -> int:
-    """Obtiene el siguiente correlativo para una serie dada (con lock de fila)."""
-    ultimo = (
-        db.session.query(db.func.max(db.cast(Comprobante.correlativo, db.Integer)))
+    """Obtiene el siguiente correlativo para una serie dada (con lock de fila).
+    PostgreSQL no permite FOR UPDATE con aggregate functions, por lo que se
+    bloquean las filas en un subquery y luego se obtiene el MAX.
+    """
+    subq = (
+        db.session.query(db.cast(Comprobante.correlativo, db.Integer))
         .filter_by(serie=serie)
         .with_for_update()
-        .scalar()
+        .subquery()
     )
+    ultimo = db.session.query(db.func.max(subq.c.correlativo)).scalar()
     return (ultimo or 0) + 1

@@ -256,10 +256,11 @@ def crear_nd():
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _siguiente_correlativo(serie: str) -> int:
-    ultimo = (
-        db.session.query(db.func.max(db.cast(Comprobante.correlativo, db.Integer)))
+    subq = (
+        db.session.query(db.cast(Comprobante.correlativo, db.Integer))
         .filter_by(serie=serie)
         .with_for_update()
-        .scalar()
+        .subquery()
     )
+    ultimo = db.session.query(db.func.max(subq.c.correlativo)).scalar()
     return (ultimo or 0) + 1
