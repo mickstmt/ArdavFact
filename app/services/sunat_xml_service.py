@@ -414,29 +414,20 @@ def _add_tax_subtotal(parent: etree.Element, base: Decimal, igv: Decimal, afecta
 def _add_legal_monetary_total(root: etree.Element, comprobante):
     """LegalMonetaryTotal — totales monetarios finales.
 
-    SUNAT valida: TaxInclusiveAmount - AllowanceTotalAmount = PayableAmount
-    Por eso TaxInclusiveAmount = total ANTES del descuento (bruto con IGV),
-    AllowanceTotalAmount = descuento CON IGV (monto completo que ve el usuario),
-    PayableAmount = total DESPUÉS del descuento.
+    AllowanceTotalAmount es opcional en UBL 2.1 y causa error 3300 si SUNAT
+    no puede validar su sumatoria. Se omite: el descuento queda declarado solo
+    en AllowanceCharge (informativo) y reflejado en PayableAmount.
+    TaxInclusiveAmount = PayableAmount = total final después del descuento.
     """
     lmt = _cac(root, 'LegalMonetaryTotal')
     gravadas   = _d(comprobante.total_operaciones_gravadas)
     exoneradas = _d(comprobante.total_operaciones_exoneradas)
     inafectas  = _d(comprobante.total_operaciones_inafectas)
-    igv        = _d(comprobante.total_igv)
     total      = _d(comprobante.total)
-    descuento  = _d(comprobante.descuento)
 
-    line_ext   = gravadas + exoneradas + inafectas
-    total_bruto = line_ext + igv  # total antes del descuento
-
+    line_ext = gravadas + exoneradas + inafectas
     _amt(lmt, 'LineExtensionAmount', line_ext)
-    # TaxInclusiveAmount = bruto (antes de descontar); si no hay descuento = total
-    _amt(lmt, 'TaxInclusiveAmount', total_bruto)
-
-    if descuento > Decimal('0'):
-        # AllowanceTotalAmount = descuento CON IGV (lo que ve el usuario)
-        _amt(lmt, 'AllowanceTotalAmount', descuento)
+    _amt(lmt, 'TaxInclusiveAmount', total)
 
     # Cargos (envío gravado)
     envio = _d(comprobante.costo_envio)
