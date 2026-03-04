@@ -408,23 +408,31 @@ def _add_tax_subtotal(parent: etree.Element, base: Decimal, igv: Decimal, afecta
 
 
 def _add_legal_monetary_total(root: etree.Element, comprobante):
-    """LegalMonetaryTotal — totales monetarios finales."""
+    """LegalMonetaryTotal — totales monetarios finales.
+
+    SUNAT valida: TaxInclusiveAmount - AllowanceTotalAmount = PayableAmount
+    Por eso TaxInclusiveAmount = total ANTES del descuento (bruto con IGV),
+    AllowanceTotalAmount = descuento CON IGV (monto completo que ve el usuario),
+    PayableAmount = total DESPUÉS del descuento.
+    """
     lmt = _cac(root, 'LegalMonetaryTotal')
     gravadas   = _d(comprobante.total_operaciones_gravadas)
     exoneradas = _d(comprobante.total_operaciones_exoneradas)
     inafectas  = _d(comprobante.total_operaciones_inafectas)
+    igv        = _d(comprobante.total_igv)
     total      = _d(comprobante.total)
+    descuento  = _d(comprobante.descuento)
 
-    # gravadas ya contiene el valor original (sin restar descuento)
-    line_ext = gravadas + exoneradas + inafectas
+    line_ext   = gravadas + exoneradas + inafectas
+    total_bruto = line_ext + igv  # total antes del descuento
+
     _amt(lmt, 'LineExtensionAmount', line_ext)
-    _amt(lmt, 'TaxInclusiveAmount', total)
+    # TaxInclusiveAmount = bruto (antes de descontar); si no hay descuento = total
+    _amt(lmt, 'TaxInclusiveAmount', total_bruto)
 
-    # Descuento global (AllowanceTotalAmount = monto sin IGV, informativo)
-    descuento = _d(comprobante.descuento)
     if descuento > Decimal('0'):
-        descuento_sin_igv = (descuento / Decimal('1.18')).quantize(Decimal('0.01'), ROUND_HALF_UP)
-        _amt(lmt, 'AllowanceTotalAmount', descuento_sin_igv)
+        # AllowanceTotalAmount = descuento CON IGV (lo que ve el usuario)
+        _amt(lmt, 'AllowanceTotalAmount', descuento)
 
     # Cargos (envío gravado)
     envio = _d(comprobante.costo_envio)
