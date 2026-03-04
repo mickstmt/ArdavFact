@@ -237,6 +237,15 @@ def procesar_comprobante(comprobante) -> dict:
         codigo_sunat  = str(resultado.get('codigo', '') or '')
         mensaje_sunat = resultado.get('descripcion') or resultado.get('mensaje') or ''
 
+        # MiPSE a veces embebe el código en el mensaje ("3300 - La sumatoria...")
+        # Si codigo_sunat está vacío, intentar extraerlo del mensaje
+        if not codigo_sunat and mensaje_sunat:
+            import re
+            m = re.match(r'^(\d{3,4})\s*[-–]', mensaje_sunat)
+            if m:
+                codigo_sunat = m.group(1)
+                log.info('mipse_codigo_extraido_de_mensaje', codigo=codigo_sunat)
+
         # El código SUNAT es la fuente de verdad:
         # 0xxx = ACEPTADO limpio
         # 2xxx = ACEPTADO con observación
