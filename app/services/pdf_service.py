@@ -304,8 +304,10 @@ def _seccion_totales_y_qr(comp, cfg, styles) -> list:
         ('Op. Gravadas', _fmt(comp.total_operaciones_gravadas)),
         ('Op. Exoneradas', _fmt(comp.total_operaciones_exoneradas)),
         ('Op. Inafectas', _fmt(comp.total_operaciones_inafectas)),
-        ('I.G.V. 18%', _fmt(comp.total_igv)),
     ]
+    if comp.descuento and comp.descuento > 0:
+        rows_totales.append(('(-) Descuento', _fmt(comp.descuento)))
+    rows_totales.append(('I.G.V. 18%', _fmt(comp.total_igv)))
     if comp.costo_envio and comp.costo_envio > 0:
         rows_totales.append(('Envío (gravado)', _fmt(comp.costo_envio)))
 
@@ -314,19 +316,24 @@ def _seccion_totales_y_qr(comp, cfg, styles) -> list:
 
     # Construir datos tabla totales
     data_tot = []
-    for row in rows_totales:
+    desc_row_idx = None
+    for i, row in enumerate(rows_totales):
         if row is None:
             data_tot.append(['', ''])
         else:
             etiqueta, valor = row
             es_total = etiqueta == 'IMPORTE TOTAL'
+            es_descuento = etiqueta == '(-) Descuento'
+            if es_descuento:
+                desc_row_idx = i
             data_tot.append([
                 Paragraph(etiqueta, styles['tot_etiqueta_grand' if es_total else 'tot_etiqueta']),
-                Paragraph(f'S/ {valor}' if not valor.startswith('S/') else valor,
+                Paragraph(f'-S/ {valor}' if es_descuento else (f'S/ {valor}' if not valor.startswith('S/') else valor),
                           styles['tot_valor_grand' if es_total else 'tot_valor']),
             ])
 
     tabla_tot = Table(data_tot, colWidths=[50 * mm, 30 * mm])
+    from reportlab.lib import colors as rl_colors
     style_tot = [
         ('ALIGN',   (1, 0), (1, -1), 'RIGHT'),
         ('VALIGN',  (0, 0), (-1, -1), 'MIDDLE'),
@@ -335,6 +342,8 @@ def _seccion_totales_y_qr(comp, cfg, styles) -> list:
         ('LINEABOVE', (0, -1), (-1, -1), 1, _GRIS_OSC),
         ('BACKGROUND', (0, -1), (-1, -1), _GRIS_CLR),
     ]
+    if desc_row_idx is not None:
+        style_tot.append(('TEXTCOLOR', (0, desc_row_idx), (-1, desc_row_idx), rl_colors.HexColor('#c0392b')))
     tabla_tot.setStyle(TableStyle(style_tot))
 
     # ── Son QR ──

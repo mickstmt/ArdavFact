@@ -61,6 +61,7 @@ def crear_nc():
         motivo_texto = motivo_desc or MOTIVOS_NC.get(motivo_codigo, '')
 
         costo_envio_ref = Decimal(str(comp_ref.costo_envio or '0'))
+        descuento_ref   = Decimal(str(comp_ref.descuento or '0'))
         nc = Comprobante(
             tipo_comprobante='NOTA_CREDITO',
             tipo_documento_sunat='07',
@@ -71,6 +72,7 @@ def crear_nc():
             vendedor_id=current_user.id,
             numero_orden=comp_ref.numero_orden,
             costo_envio=costo_envio_ref,
+            descuento=descuento_ref,
             estado='PENDIENTE',
             fecha_emision=datetime.utcnow(),
             comprobante_referencia_id=comp_ref.id,
@@ -104,7 +106,7 @@ def crear_nc():
 
         db.session.flush()
 
-        totales = calcular_totales_comprobante(items_obj, costo_envio_ref)
+        totales = calcular_totales_comprobante(items_obj, costo_envio_ref, descuento_ref)
         nc.subtotal                     = sum(i.subtotal_con_igv for i in items_obj)
         nc.total_operaciones_gravadas   = totales['total_gravadas']
         nc.total_operaciones_exoneradas = totales['total_exoneradas']
@@ -257,6 +259,7 @@ def _siguiente_correlativo(serie: str) -> int:
     ultimo = (
         db.session.query(db.func.max(db.cast(Comprobante.correlativo, db.Integer)))
         .filter_by(serie=serie)
+        .with_for_update()
         .scalar()
     )
     return (ultimo or 0) + 1

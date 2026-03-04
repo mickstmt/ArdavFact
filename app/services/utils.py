@@ -45,18 +45,32 @@ def calcular_igv_item(
     }
 
 
-def calcular_totales_comprobante(items: list, costo_envio: Decimal = Decimal('0')) -> dict:
+def calcular_totales_comprobante(
+    items: list,
+    costo_envio: Decimal = Decimal('0'),
+    descuento: Decimal = Decimal('0'),
+) -> dict:
     """
     Calcula los totales tributarios del comprobante a partir de sus ítems.
     El envío siempre se trata como operación gravada.
+    El descuento (con IGV incluido) se aplica solo sobre ítems gravados.
     """
     costo_envio = Decimal(str(costo_envio))
+    descuento   = Decimal(str(descuento))
 
     _D0 = Decimal('0')
     total_gravadas   = sum((Decimal(str(i.subtotal_sin_igv)) for i in items if i.tipo_afectacion_igv == '10'), _D0)
     total_exoneradas = sum((Decimal(str(i.subtotal_sin_igv)) for i in items if i.tipo_afectacion_igv == '20'), _D0)
     total_inafectas  = sum((Decimal(str(i.subtotal_sin_igv)) for i in items if i.tipo_afectacion_igv == '30'), _D0)
     total_igv        = sum((Decimal(str(i.igv_total)) for i in items if i.tipo_afectacion_igv == '10'), _D0)
+
+    # Descuento sobre productos gravados (el usuario ingresa monto con IGV)
+    descuento_sin_igv = _D0
+    if descuento > _D0:
+        descuento_sin_igv = (descuento / IGV_DIVISOR).quantize(Decimal('0.01'), ROUND_HALF_UP)
+        igv_descuento     = (descuento - descuento_sin_igv).quantize(Decimal('0.01'), ROUND_HALF_UP)
+        total_gravadas   -= descuento_sin_igv
+        total_igv        -= igv_descuento
 
     if costo_envio > 0:
         envio_sin_igv = (costo_envio / IGV_DIVISOR).quantize(Decimal('0.01'), ROUND_HALF_UP)
@@ -72,6 +86,7 @@ def calcular_totales_comprobante(items: list, costo_envio: Decimal = Decimal('0'
         'total_inafectas':  total_inafectas.quantize(Decimal('0.01')),
         'total_igv':        total_igv.quantize(Decimal('0.01')),
         'total':            total.quantize(Decimal('0.01')),
+        'descuento_sin_igv': descuento_sin_igv.quantize(Decimal('0.01')),
     }
 
 

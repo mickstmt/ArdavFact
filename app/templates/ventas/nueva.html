@@ -187,6 +187,14 @@
                class="af-form-control" style="flex:1; font-size:0.82rem; text-align:right;"
                oninput="calcularTotales()">
       </div>
+      <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.6rem;">
+        <label style="font-size:0.78rem; color:var(--af-text-muted); white-space:nowrap; margin:0;">Descuento:</label>
+        <button id="desc-modo" data-modo="pct" onclick="toggleDescModo()"
+                style="font-size:0.72rem; padding:2px 7px; border:1px solid var(--af-border); border-radius:4px; background:var(--af-surface); color:var(--af-text); cursor:pointer; white-space:nowrap; flex-shrink:0;">%</button>
+        <input type="number" id="desc-valor" value="0" min="0" step="0.01"
+               class="af-form-control" style="flex:1; font-size:0.82rem; text-align:right;"
+               oninput="calcularTotales()">
+      </div>
       <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.75rem;">
         <label style="font-size:0.78rem; color:var(--af-text-muted); white-space:nowrap; margin:0;">N° Orden:</label>
         <input type="text" id="numero-orden" placeholder="WooCommerce #"
@@ -199,7 +207,8 @@
         <input type="date" id="fecha-emision"
                class="af-form-control" style="flex:1; font-size:0.82rem;">
       </div>
-      <div class="total-row"><span>Base imponible</span><span id="t-base">S/ 0.00</span></div>
+      <div class="total-row"><span>Subtotal</span><span id="t-base">S/ 0.00</span></div>
+      <div class="total-row" id="t-descuento-row" style="display:none; color:#dc3545;"><span>(-) Descuento</span><span id="t-descuento">S/ 0.00</span></div>
       <div class="total-row"><span>IGV 18%</span><span id="t-igv">S/ 0.00</span></div>
       <div class="total-row"><span>Envío (gravado)</span><span id="t-envio">S/ 0.00</span></div>
       <div class="total-row grand"><span>TOTAL</span><span id="t-total">S/ 0.00</span></div>
@@ -493,20 +502,69 @@ function renderCarrito() {
   emptyEl.style.display = 'none';
 }
 
+// ── Helper: monto de descuento en soles con IGV ──
+function _calcDescuentoMonto() {
+  const descModo = document.getElementById('desc-modo').dataset.modo;
+  const descVal  = parseFloat(document.getElementById('desc-valor').value) || 0;
+  if (descVal <= 0) return 0;
+  let subtotalGravadas = 0;
+  cartItems.forEach(item => {
+    if (item.tipo_afectacion_igv === '10') subtotalGravadas += item.precio_con_igv * item.cantidad;
+  });
+  if (descModo === 'pct') return Math.min(subtotalGravadas * descVal / 100, subtotalGravadas);
+  return Math.min(descVal, subtotalGravadas);
+}
+
+// ── Descuento modo toggle ──
+function toggleDescModo() {
+  const btn = document.getElementById('desc-modo');
+  if (btn.dataset.modo === 'pct') {
+    btn.dataset.modo = 'monto';
+    btn.textContent = 'S/';
+  } else {
+    btn.dataset.modo = 'pct';
+    btn.textContent = '%';
+  }
+  calcularTotales();
+}
+
 // ── IGV ──
 function calcularTotales() {
-  let base = 0, igv = 0;
+  let gravBase = 0, gravIgv = 0, otraBase = 0;
   const envio = parseFloat(document.getElementById('costo-envio').value) || 0;
   cartItems.forEach(item => {
     if (item.tipo_afectacion_igv === '10') {
       const b = item.precio_con_igv / 1.18;
-      base += b * item.cantidad;
-      igv  += (item.precio_con_igv - b) * item.cantidad;
-    } else { base += item.precio_con_igv * item.cantidad; }
+      gravBase += b * item.cantidad;
+      gravIgv  += (item.precio_con_igv - b) * item.cantidad;
+    } else { otraBase += item.precio_con_igv * item.cantidad; }
   });
+
+  // Calcular descuento (solo sobre gravadas)
+  const descModo = document.getElementById('desc-modo').dataset.modo;
+  const descVal  = parseFloat(document.getElementById('desc-valor').value) || 0;
+  const subtotalGravadas = gravBase + gravIgv;
+  let descMonto = 0;
+  if (descVal > 0 && subtotalGravadas > 0) {
+    descMonto = descModo === 'pct'
+      ? Math.min(subtotalGravadas * descVal / 100, subtotalGravadas)
+      : Math.min(descVal, subtotalGravadas);
+    const dBase = descMonto / 1.18;
+    gravBase -= dBase;
+    gravIgv  -= (descMonto - dBase);
+  }
+
+  let base = gravBase + otraBase;
+  let igv  = gravIgv;
   let envioBase = 0;
   if (envio > 0) { envioBase = envio / 1.18; base += envioBase; igv += envio - envioBase; }
+
   document.getElementById('t-base').textContent  = formatMoney(base - envioBase);
+  const descRow = document.getElementById('t-descuento-row');
+  if (descMonto > 0) {
+    document.getElementById('t-descuento').textContent = `-${formatMoney(descMonto)}`;
+    descRow.style.display = '';
+  } else { descRow.style.display = 'none'; }
   document.getElementById('t-igv').textContent   = formatMoney(igv);
   document.getElementById('t-envio').textContent = formatMoney(envio);
   document.getElementById('t-total').textContent = formatMoney(base + igv);
@@ -732,6 +790,7 @@ async function emitirComprobante() {
           atributos: i.atributos || null,
         })),
         costo_envio: parseFloat(document.getElementById('costo-envio').value) || 0,
+        descuento: _calcDescuentoMonto(),
         numero_orden: document.getElementById('numero-orden').value.trim() || null,
         fecha_emision: document.getElementById('fecha-emision').value || null,
       }
@@ -743,6 +802,7 @@ async function emitirComprobante() {
       renderCarrito();
       calcularTotales();
       document.getElementById('costo-envio').value = '0';
+      document.getElementById('desc-valor').value = '0';
       document.getElementById('numero-orden').value = '';
       const hoyReset = new Date();
       document.getElementById('fecha-emision').value = `${hoyReset.getFullYear()}-${String(hoyReset.getMonth()+1).padStart(2,'0')}-${String(hoyReset.getDate()).padStart(2,'0')}`;

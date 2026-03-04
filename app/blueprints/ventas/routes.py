@@ -45,6 +45,7 @@ def crear_venta():
         cliente_datos      = payload.get('cliente')
         items_datos        = payload.get('items', [])
         costo_envio        = Decimal(str(payload.get('costo_envio', '0')))
+        descuento          = Decimal(str(payload.get('descuento', '0')))
         numero_orden       = payload.get('numero_orden', '').strip() or None
         fecha_emision_str  = (payload.get('fecha_emision') or '').strip() or None
 
@@ -89,6 +90,7 @@ def crear_venta():
             vendedor_id=current_user.id,
             numero_orden=numero_orden,
             costo_envio=costo_envio,
+            descuento=descuento,
             estado='PENDIENTE',
             fecha_emision=fecha_emision,
         )
@@ -126,7 +128,7 @@ def crear_venta():
         db.session.flush()
 
         # ── Calcular totales del comprobante ──
-        totales = calcular_totales_comprobante(items_obj, costo_envio)
+        totales = calcular_totales_comprobante(items_obj, costo_envio, descuento)
         comprobante.subtotal = sum(i.subtotal_con_igv for i in items_obj)
         comprobante.total_operaciones_gravadas   = totales['total_gravadas']
         comprobante.total_operaciones_exoneradas = totales['total_exoneradas']

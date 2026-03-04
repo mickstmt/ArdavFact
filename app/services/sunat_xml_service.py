@@ -162,6 +162,7 @@ def _generar_invoice(comprobante) -> etree.Element:
     _add_signature(root, cfg)
     _add_supplier_party(root, cfg)
     _add_customer_party(root, cliente)
+    _add_allowance_charge(root, comprobante)
     _add_tax_total(root, comprobante)
     _add_legal_monetary_total(root, comprobante)
 
@@ -202,6 +203,7 @@ def _generar_credit_note(comprobante) -> etree.Element:
     _add_signature(root, cfg)
     _add_supplier_party(root, cfg)
     _add_customer_party(root, cliente)
+    _add_allowance_charge(root, comprobante)
     _add_tax_total(root, comprobante)
     _add_legal_monetary_total(root, comprobante)
 
@@ -242,6 +244,7 @@ def _generar_debit_note(comprobante) -> etree.Element:
     _add_signature(root, cfg)
     _add_supplier_party(root, cfg)
     _add_customer_party(root, cliente)
+    _add_allowance_charge(root, comprobante)
     _add_tax_total(root, comprobante)
     _add_legal_monetary_total(root, comprobante)
 
@@ -346,6 +349,26 @@ def _add_billing_reference(root: etree.Element, comp_ref):
     _cbc(ir, 'DocumentTypeCode', comp_ref.tipo_documento_sunat)
 
 
+def _add_allowance_charge(root: etree.Element, comprobante):
+    """AllowanceCharge de descuento global — solo si hay descuento."""
+    descuento = _d(comprobante.descuento)
+    if descuento <= Decimal('0'):
+        return
+    descuento_sin_igv = (descuento / Decimal('1.18')).quantize(Decimal('0.01'), ROUND_HALF_UP)
+    gravadas_originales = (
+        _d(comprobante.total_operaciones_gravadas) + descuento_sin_igv
+    )
+    ac = _cac(root, 'AllowanceCharge')
+    _cbc(ac, 'ChargeIndicator', 'false')
+    rc = _cbc(ac, 'AllowanceChargeReasonCode', '00')
+    rc.set('listAgencyName', 'PE:SUNAT')
+    rc.set('listName', 'Cargo/descuento')
+    rc.set('listURI', 'urn:pe:gob:sunat:cpe:see:gem:catalogos:catalogo53')
+    _cbc(ac, 'AllowanceChargeReason', 'Descuento Global')
+    _amt(ac, 'Amount', descuento_sin_igv)
+    _amt(ac, 'BaseAmount', gravadas_originales)
+
+
 def _add_tax_total(root: etree.Element, comprobante):
     """TaxTotal global del comprobante."""
     tt = _cac(root, 'TaxTotal')
@@ -387,14 +410,25 @@ def _add_tax_subtotal(parent: etree.Element, base: Decimal, igv: Decimal, afecta
 def _add_legal_monetary_total(root: etree.Element, comprobante):
     """LegalMonetaryTotal — totales monetarios finales."""
     lmt = _cac(root, 'LegalMonetaryTotal')
-    gravadas    = _d(comprobante.total_operaciones_gravadas)
-    exoneradas  = _d(comprobante.total_operaciones_exoneradas)
-    inafectas   = _d(comprobante.total_operaciones_inafectas)
-    line_ext    = gravadas + exoneradas + inafectas
-    total       = _d(comprobante.total)
+    gravadas   = _d(comprobante.total_operaciones_gravadas)
+    exoneradas = _d(comprobante.total_operaciones_exoneradas)
+    inafectas  = _d(comprobante.total_operaciones_inafectas)
+    total      = _d(comprobante.total)
 
+    # Descuento: gravadas ya tiene el descuento restado; reconstruir base original
+    descuento = _d(comprobante.descuento)
+    descuento_sin_igv = Decimal('0')
+    if descuento > Decimal('0'):
+        descuento_sin_igv = (descuento / Decimal('1.18')).quantize(Decimal('0.01'), ROUND_HALF_UP)
+
+    # LineExtensionAmount = suma original de líneas (sin descontar)
+    line_ext = gravadas + descuento_sin_igv + exoneradas + inafectas
     _amt(lmt, 'LineExtensionAmount', line_ext)
     _amt(lmt, 'TaxInclusiveAmount', total)
+
+    # Descuento global
+    if descuento_sin_igv > Decimal('0'):
+        _amt(lmt, 'AllowanceTotalAmount', descuento_sin_igv)
 
     # Cargos (envío gravado)
     envio = _d(comprobante.costo_envio)
