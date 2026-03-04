@@ -354,10 +354,14 @@ def _add_allowance_charge(root: etree.Element, comprobante):
     descuento = _d(comprobante.descuento)
     if descuento <= Decimal('0'):
         return
-    # descuento es el monto total con IGV; Amount va sin IGV (base del descuento)
-    descuento_sin_igv = (descuento / Decimal('1.18')).quantize(Decimal('0.01'), ROUND_HALF_UP)
-    # total_operaciones_gravadas ya tiene el valor original (sin restar descuento)
-    gravadas_originales = _d(comprobante.total_operaciones_gravadas)
+    # Amount debe coincidir con AllowanceTotalAmount en LegalMonetaryTotal.
+    # Ambos = descuento con IGV (monto completo visible al usuario).
+    # BaseAmount = total bruto con IGV antes del descuento.
+    gravadas   = _d(comprobante.total_operaciones_gravadas)
+    igv        = _d(comprobante.total_igv)
+    exoneradas = _d(comprobante.total_operaciones_exoneradas)
+    inafectas  = _d(comprobante.total_operaciones_inafectas)
+    total_bruto = gravadas + exoneradas + inafectas + igv
     ac = _cac(root, 'AllowanceCharge')
     _cbc(ac, 'ChargeIndicator', 'false')
     rc = _cbc(ac, 'AllowanceChargeReasonCode', '00')
@@ -365,8 +369,8 @@ def _add_allowance_charge(root: etree.Element, comprobante):
     rc.set('listName', 'Cargo/descuento')
     rc.set('listURI', 'urn:pe:gob:sunat:cpe:see:gem:catalogos:catalogo53')
     _cbc(ac, 'AllowanceChargeReason', 'Descuento Global')
-    _amt(ac, 'Amount', descuento_sin_igv)
-    _amt(ac, 'BaseAmount', gravadas_originales)
+    _amt(ac, 'Amount', descuento)
+    _amt(ac, 'BaseAmount', total_bruto)
 
 
 def _add_tax_total(root: etree.Element, comprobante):

@@ -146,15 +146,19 @@ def crear_venta():
 
         db.session.commit()
 
-        if resultado_mipse['success']:
-            msg = (
-                f'Comprobante {comprobante.numero_completo} emitido. '
-                f'Estado SUNAT: {resultado_mipse["estado"]}.'
-            )
-        else:
+        sunat_aceptado = comprobante.estado == 'ACEPTADO'
+
+        if not resultado_mipse['success']:
             msg = (
                 f'Comprobante {comprobante.numero_completo} guardado como PENDIENTE. '
                 f'Error SUNAT: {resultado_mipse["mensaje_sunat"]}'
+            )
+        elif sunat_aceptado:
+            msg = f'Comprobante {comprobante.numero_completo} emitido y ACEPTADO por SUNAT.'
+        else:
+            msg = (
+                f'Comprobante {comprobante.numero_completo} RECHAZADO por SUNAT. '
+                f'{resultado_mipse.get("mensaje_sunat", "")}'
             )
 
         return jsonify({
@@ -163,7 +167,7 @@ def crear_venta():
             'comprobante_id': comprobante.id,
             'numero': comprobante.numero_completo,
             'estado': comprobante.estado,
-            'sunat_ok': resultado_mipse['success'],
+            'sunat_ok': sunat_aceptado,
             'sunat_mensaje': resultado_mipse.get('mensaje_sunat', ''),
         })
 

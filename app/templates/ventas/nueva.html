@@ -796,7 +796,8 @@ async function emitirComprobante() {
       }
     });
     if (res.success) {
-      showToast('Comprobante creado', `${res.numero} — ${res.estado}`, 'success');
+      const toastTipo = res.sunat_ok ? 'success' : 'danger';
+      showToast('Comprobante emitido', `${res.numero} — ${res.estado}`, toastTipo);
       cartItems = [];
       limpiarCliente();
       renderCarrito();
