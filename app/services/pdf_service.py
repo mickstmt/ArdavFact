@@ -113,7 +113,22 @@ def _seccion_encabezado(comp, cfg, styles) -> list:
 
     logo_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'static', 'img', 'logo.png')
     if os.path.exists(logo_path):
-        empresa_lines.append(Image(logo_path, width=40 * mm, height=20 * mm, kind='proportional'))
+        try:
+            from PIL import Image as PILImage
+            pil_img = PILImage.open(logo_path)
+            if pil_img.mode in ('RGBA', 'LA', 'P'):
+                bg = PILImage.new('RGB', pil_img.size, (255, 255, 255))
+                mask = pil_img.split()[-1] if pil_img.mode in ('RGBA', 'LA') else None
+                bg.paste(pil_img.convert('RGBA'), mask=mask)
+                pil_img = bg
+            elif pil_img.mode != 'RGB':
+                pil_img = pil_img.convert('RGB')
+            logo_buf = io.BytesIO()
+            pil_img.save(logo_buf, format='PNG')
+            logo_buf.seek(0)
+            empresa_lines.append(Image(logo_buf, width=40 * mm, height=20 * mm, kind='proportional'))
+        except Exception:
+            empresa_lines.append(Image(logo_path, width=40 * mm, height=20 * mm, kind='proportional'))
         empresa_lines.append(Spacer(1, 2 * mm))
 
     empresa_lines += [

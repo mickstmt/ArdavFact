@@ -310,6 +310,10 @@ def _add_supplier_party(root: etree.Element, cfg):
 
     ple = _cac(party, 'PartyLegalEntity')
     _cbc(ple, 'RegistrationName', cfg.get('EMPRESA_RAZON_SOCIAL', ''))
+    reg_addr = _cac(ple, 'RegistrationAddress')
+    atc = _cbc(reg_addr, 'AddressTypeCode', '0000')
+    atc.set('listAgencyName', 'PE:SUNAT')
+    atc.set('listName', 'Establecimientos anexos')
 
 
 def _add_customer_party(root: etree.Element, cliente):
