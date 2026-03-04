@@ -237,7 +237,11 @@ def procesar_comprobante(comprobante) -> dict:
         codigo_sunat  = str(resultado.get('codigo', '') or '')
         mensaje_sunat = resultado.get('descripcion') or resultado.get('mensaje') or ''
 
-        if estado_sunat in ('ACEPTADO', 'ACEPTADO CON OBSERVACIONES'):
+        # El código SUNAT es la fuente de verdad:
+        # 4xxx = RECHAZADO | 2xxx/3xxx = ACEPTADO con observación | resto = según estado MiPSE
+        if codigo_sunat.startswith('4'):
+            comprobante.estado = 'RECHAZADO'
+        elif estado_sunat in ('ACEPTADO', 'ACEPTADO CON OBSERVACIONES') or codigo_sunat.startswith(('0', '2', '3')):
             comprobante.estado = 'ACEPTADO'
         elif estado_sunat == 'RECHAZADO':
             comprobante.estado = 'RECHAZADO'
