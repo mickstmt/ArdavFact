@@ -414,20 +414,23 @@ def _add_tax_subtotal(parent: etree.Element, base: Decimal, igv: Decimal, afecta
 def _add_legal_monetary_total(root: etree.Element, comprobante):
     """LegalMonetaryTotal — totales monetarios finales.
 
-    AllowanceTotalAmount es opcional en UBL 2.1 y causa error 3300 si SUNAT
-    no puede validar su sumatoria. Se omite: el descuento queda declarado solo
-    en AllowanceCharge (informativo) y reflejado en PayableAmount.
-    TaxInclusiveAmount = PayableAmount = total final después del descuento.
+    SUNAT 3279: TaxInclusiveAmount = LineExtensionAmount + TaxTotal (total bruto).
+    SUNAT 3300: AllowanceTotalAmount omitido (opcional, evita conflictos).
+    El descuento se refleja solo en PayableAmount (total final al cliente).
     """
     lmt = _cac(root, 'LegalMonetaryTotal')
     gravadas   = _d(comprobante.total_operaciones_gravadas)
     exoneradas = _d(comprobante.total_operaciones_exoneradas)
     inafectas  = _d(comprobante.total_operaciones_inafectas)
+    igv        = _d(comprobante.total_igv)
     total      = _d(comprobante.total)
 
-    line_ext = gravadas + exoneradas + inafectas
+    line_ext    = gravadas + exoneradas + inafectas
+    total_bruto = (line_ext + igv).quantize(Decimal('0.01'))
+
     _amt(lmt, 'LineExtensionAmount', line_ext)
-    _amt(lmt, 'TaxInclusiveAmount', total)
+    # TaxInclusiveAmount = LineExtensionAmount + TaxTotal (requerido por SUNAT 3279)
+    _amt(lmt, 'TaxInclusiveAmount', total_bruto)
 
     # Cargos (envío gravado)
     envio = _d(comprobante.costo_envio)
@@ -435,6 +438,7 @@ def _add_legal_monetary_total(root: etree.Element, comprobante):
         envio_sin_igv = (envio / Decimal('1.18')).quantize(Decimal('0.01'), ROUND_HALF_UP)
         _amt(lmt, 'ChargeTotalAmount', envio_sin_igv)
 
+    # PayableAmount = total final después del descuento global
     _amt(lmt, 'PayableAmount', total)
 
 
