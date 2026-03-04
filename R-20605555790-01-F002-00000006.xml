@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ar:ApplicationResponse xmlns:ext="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2" xmlns:ds="http://www.w3.org/2000/09/xmldsig#" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope" xmlns:ar="urn:oasis:names:specification:ubl:schema:xsd:ApplicationResponse-2">
+  <ext:UBLExtensions>
+    <ext:UBLExtension><ext:ExtensionContent><Signature xmlns="http://www.w3.org/2000/09/xmldsig#"><SignedInfo><CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315" /><SignatureMethod Algorithm="http://www.w3.org/2001/04/xmldsig-more#rsa-sha256" /><Reference URI=""><Transforms><Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature" /><Transform Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#" /></Transforms><DigestMethod Algorithm="http://www.w3.org/2001/04/xmlenc#sha256" /><DigestValue>CT8zFipp2Bm/tO/BIqoKHFN2hgkO3ympgyv64G7aG+k=</DigestValue></Reference></SignedInfo><SignatureValue>Fl2NC4EnlaMG1DzatNesd1ODf4jXJDV9BPlqzOnwc5XuCwydW/c+ocyGJE5Mu1BX1fb3VR14ZIVpH7h7m0gIYR2gaalMMpgNlvL01NP9e8fApnM+U/N2H8gU+eMfst595B7ThT/Skh881rbUjppIKmuPTaSJxyRzJUrj20ctvDOGvmZziKus+bflOJHZ3YQex0zhHG+r1JTFpZJkD07s37QnEA/ZE0D9HyYbwfR8HEmahH+H0tLoVAxjUl5C3QyhmkE0xL7Q2eu1uOCujmzTKoPAVif3bW92wKvXOle8KFzbhF+Eg/37XLq8GfVGjLc8TZn86oKduPlr3ENBPRMAdQ==</SignatureValue><KeyInfo><X509Data><X509SubjectName>C=PE, O=LLAMA.PE, CN=Llama.pe SHA256 Standard CA</X509SubjectName><X509Certificate>MIIFrjCCBJagAwIBAgIIc2eNOs0y3WswDQYJKoZIhvcNAQELBQAwRjEkMCIGA1UEAwwbTGxhbWEucGUgU0hBMjU2IFN0YW5kYXJkIENBMREwDwYDVQQKDAhMTEFNQS5QRTELMAkGA1UEBhMCUEUwHhcNMjQwMTI1MTkyMzQxWhcNMjYwMTI0MTkyMzAwWjCCAVQxKzApBgNVBAkMIkFWLiBHQVJDSUxBU08gREUgTEEgVkVHQSBOUk8uIDE0NzIxIjAgBgkqhkiG9w0BCQEWE3JtZXphZ0BzdW5hdC5nb2IucGUxQTA/BgNVBAMMOFNVUEVSSU5ULiBOQUMuIERFIEFEVUFOQVMgWSBERSBBRE1JTklTVFJBQ0lPTiBUUklCVVRBUklBMRwwGgYDVQQLDBNBR0VOVEUgQVVUT01BVElaQURPMS4wLAYDVQQLDCVWYWxpZGFkbyBwb3IgQUJDIElERU5USURBRCBESUdJVEFMIEVSMVQwUgYDVQQKDEtTVVBFUklOVEVOREVOQ0lBIE5BQ0lPTkFMIERFIEFEVUFOQVMgWSBERSBBRE1JTklTVFJBQ0lPTiBUUklCVVRBUklBIC0gU1VOQVQxDTALBgNVBAcMBExJTUExCzAJBgNVBAYTAlBFMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAxiw3ab0PlTQpV4Xw5sFK/+m8y5ZEFqOWDW/Jo2kEd11ICZTomYgo3VCT86RPw0OSRoNwHx6fzRnw9ea/jOCCdNyr0W/aRYGuU0t21QKK+w3hzuV2GBCYIJ3WVSByVxwgMe0oQr8wNnZg7FD25W/3HveIQOIJDGPH6a3gQ7E9uMu26zp3uvG3+sI3uTi+4rYNi618Wrg1YbtqfhprsC/32FXlWsJoB4YX4ei9izJrKpso4fsgsl4q7jcDbE1mmssEYImhZIc523b8BpgSkrHYOfADREXKBpH3imZKLmADzbnY6F2evUIjZrE4YVNO1MSklxCtzcsy91cwcZAaK/UPDQIDAQABo4IBjjCCAYowDAYDVR0TAQH/BAIwADAfBgNVHSMEGDAWgBRdiFut62X7/mii5NlvPVdyou8rmTBnBggrBgEFBQcBAQRbMFkwNQYIKwYBBQUHMAKGKWh0dHA6Ly9jcnQubGxhbWEucGUvbGxhbWFwZXN0YW5kYXJkY2EuY2VyMCAGCCsGAQUFBzABhhRodHRwOi8vb2NzcC5sbGFtYS5wZTAeBgNVHREEFzAVgRNybWV6YWdAc3VuYXQuZ29iLnBlMEYGA1UdIAQ/MD0wOwYNKwYBBAGDl3cAAQADATAqMCgGCCsGAQUFBwIBFhxodHRwczovL2xsYW1hLnBlL3JlcG9zaXRvcnkvMB0GA1UdJQQWMBQGCCsGAQUFBwMCBggrBgEFBQcDBDA6BgNVHR8EMzAxMC+gLaArhilodHRwOi8vY3JsLmxsYW1hLnBlL2xsYW1hcGVzdGFuZGFyZGNhLmNybDAdBgNVHQ4EFgQUyqaBmn52E+bZ5nB5i34oE0fcqG4wDgYDVR0PAQH/BAQDAgbAMA0GCSqGSIb3DQEBCwUAA4IBAQCwmv7rS+NNsb7O1VmIcKt7ZThv713+NQlt3hS/6cSHkvfXWpFu/qLHCm0S2GTwOBYjHSSNmoGXKKmXBehWcLn2Zx7eE4Te0naghaZ10VkCd4FN/A4yZji3QIJj0s7xMzgrHnGBOXJmWvC9RSEpvvqR6vdgSJBI8+R/Qt/j1KR4gA/bSiIqdSKp4sHmloVUBMOlpgM8kzm74VmcxV9MT2hsv+JwnWXx2OnLetjjZfXnXBC7UJu35EsLSgETF9wEht7fWTAtl/rEEatQt1A1BdvaiBVsIyKl8qakxT6eIMLgwHYfuZYfgpHys3Gy96pspM3aCjHKO2b/ZntyT4V813zj</X509Certificate></X509Data></KeyInfo></Signature></ext:ExtensionContent></ext:UBLExtension>
+  </ext:UBLExtensions>
+  <cbc:UBLVersionID>2.1</cbc:UBLVersionID>
+  <cbc:CustomizationID>1.0</cbc:CustomizationID>
+  <cbc:ID>71bd17a5-6b63-4d27-b654-f25f18e1e8c1</cbc:ID>
+  <cbc:IssueDate>2026-03-04</cbc:IssueDate>
+  <cbc:IssueTime>18:10:22.38889</cbc:IssueTime>
+  <cbc:ResponseDate>2026-03-04</cbc:ResponseDate>
+  <cbc:ResponseTime>18:10:22.48485</cbc:ResponseTime>
+  <cac:Signature>
+    <cbc:ID>SignSUNAT</cbc:ID>
+    <cac:SignatoryParty>
+      <cac:PartyIdentification>
+        <cbc:ID>20131312955</cbc:ID>
+      </cac:PartyIdentification>
+      <cac:PartyName>
+        <cbc:Name>SUNAT</cbc:Name>
+      </cac:PartyName>
+    </cac:SignatoryParty>
+    <cac:DigitalSignatureAttachment>
+      <cac:ExternalReference>
+        <cbc:URI>#SignSUNAT</cbc:URI>
+      </cac:ExternalReference>
+    </cac:DigitalSignatureAttachment>
+  </cac:Signature>
+  <cac:SenderParty>
+    <cac:PartyIdentification>
+      <cbc:ID>20131312955</cbc:ID>
+    </cac:PartyIdentification>
+  </cac:SenderParty>
+  <cac:ReceiverParty>
+    <cac:PartyIdentification>
+      <cbc:ID>20605555790</cbc:ID>
+    </cac:PartyIdentification>
+  </cac:ReceiverParty>
+  <cac:DocumentResponse>
+    <cac:Response>
+      <cbc:ReferenceID>F002-6</cbc:ReferenceID>
+      <cbc:ResponseCode>3280</cbc:ResponseCode>
+      <cbc:Description>3280 - El importe total del comprobante no coincide con el valor calculado - Detalle: value='ticket: 71bd17a5-6b63-4d27-b654-f25f18e1e8c1, error: INFO: (nodo: "/Invoice/cac:LegalMonetaryTotal/cbc:PayableAmount" valor: "251.45")'</cbc:Description>
+    </cac:Response>
+    <cac:DocumentReference>
+      <cbc:ID>F002-6</cbc:ID>
+    </cac:DocumentReference>
+    <cac:RecipientParty>
+      <cac:PartyIdentification>
+        <cbc:ID>6-20424092941</cbc:ID>
+      </cac:PartyIdentification>
+    </cac:RecipientParty>
+  </cac:DocumentResponse>
+</ar:ApplicationResponse>
