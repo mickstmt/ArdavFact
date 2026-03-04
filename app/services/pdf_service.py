@@ -112,25 +112,17 @@ def _seccion_encabezado(comp, cfg, styles) -> list:
     import os
     titulo = _TIPOS_TITULO.get(comp.tipo_comprobante, comp.tipo_comprobante)
 
-    # ── Logo ──
+    # ── Logo — mismo patrón que iziFact ──
     logo_img = None
-    logo_path = os.path.join(current_app.root_path, 'static', 'img', 'logo.png')
+    _base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    logo_path = os.path.join(_base_dir, 'static', 'img', 'logo.png')
+    current_app.logger.info(f'[PDF] logo_path={logo_path} | existe={os.path.exists(logo_path)}')
     if os.path.exists(logo_path):
         try:
             from PIL import Image as PILImage
-            import tempfile
-            pil_img = PILImage.open(logo_path)
-            img_w, img_h = pil_img.size
-            if pil_img.mode in ('RGBA', 'LA', 'P'):
-                bg = PILImage.new('RGB', pil_img.size, (255, 255, 255))
-                mask = pil_img.split()[-1] if pil_img.mode in ('RGBA', 'LA') else None
-                bg.paste(pil_img.convert('RGBA'), mask=mask)
-                pil_img = bg
-            elif pil_img.mode != 'RGB':
-                pil_img = pil_img.convert('RGB')
-            with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp:
-                tmp_path = tmp.name
-                pil_img.save(tmp_path, format='PNG')
+            pil_tmp = PILImage.open(logo_path)
+            img_w, img_h = pil_tmp.size
+            pil_tmp.close()
             # Mantener proporción dentro de 40x25mm
             max_w, max_h = 40 * mm, 25 * mm
             aspect = img_h / img_w
@@ -138,9 +130,10 @@ def _seccion_encabezado(comp, cfg, styles) -> list:
                 final_w, final_h = max_w, max_w * aspect
             else:
                 final_h, final_w = max_h, max_h / aspect
-            logo_img = Image(tmp_path, width=final_w, height=final_h)
+            logo_img = Image(logo_path, width=final_w, height=final_h)
+            current_app.logger.info(f'[PDF] Logo OK: {final_w:.1f}x{final_h:.1f}pt modo={PILImage.open(logo_path).mode}')
         except Exception as e:
-            current_app.logger.warning(f'[PDF] Logo no renderizado: {e}')
+            current_app.logger.warning(f'[PDF] Logo error {type(e).__name__}: {e}', exc_info=True)
 
     # ── Datos empresa (nested table — sin logo) ──
     emp_rows = [
