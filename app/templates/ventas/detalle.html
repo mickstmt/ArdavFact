@@ -80,10 +80,29 @@
         {% endif %}
       </div>
 
-      {# Mensaje SUNAT #}
+      {# Mensaje SUNAT — color según código:
+           RECHAZADO o 4xxx → rojo
+           ACEPTADO con observación (2xxx/3xxx) → amarillo
+           ACEPTADO limpio (200 o sin código) → verde #}
       {% if comprobante.mensaje_sunat %}
-      <div class="sunat-msg {% if comprobante.estado == 'ACEPTADO' %}sunat-ok{% elif comprobante.estado == 'RECHAZADO' %}sunat-err{% else %}sunat-warn{% endif %} mt-3">
-        <i class="bi bi-info-circle me-1"></i>
+      {% set cod = comprobante.codigo_sunat | string %}
+      {% if comprobante.estado == 'RECHAZADO' or cod.startswith('4') %}
+        {% set msg_clase = 'sunat-err' %}
+      {% elif comprobante.estado == 'ACEPTADO' and (cod.startswith('2') or cod.startswith('3')) %}
+        {% set msg_clase = 'sunat-warn' %}
+      {% elif comprobante.estado == 'ACEPTADO' %}
+        {% set msg_clase = 'sunat-ok' %}
+      {% else %}
+        {% set msg_clase = 'sunat-warn' %}
+      {% endif %}
+      <div class="sunat-msg {{ msg_clase }} mt-3">
+        {% if comprobante.estado == 'RECHAZADO' or cod.startswith('4') %}
+          <i class="bi bi-x-circle me-1"></i>
+        {% elif cod.startswith('2') or cod.startswith('3') %}
+          <i class="bi bi-exclamation-triangle me-1"></i>
+        {% else %}
+          <i class="bi bi-check-circle me-1"></i>
+        {% endif %}
         {% if comprobante.codigo_sunat %}<strong>[{{ comprobante.codigo_sunat }}]</strong> {% endif %}
         {{ comprobante.mensaje_sunat }}
       </div>
