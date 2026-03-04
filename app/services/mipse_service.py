@@ -238,10 +238,16 @@ def procesar_comprobante(comprobante) -> dict:
         mensaje_sunat = resultado.get('descripcion') or resultado.get('mensaje') or ''
 
         # El código SUNAT es la fuente de verdad:
-        # 4xxx = RECHAZADO | 2xxx/3xxx = ACEPTADO con observación | resto = según estado MiPSE
-        if codigo_sunat.startswith('4'):
+        # 0xxx = ACEPTADO limpio
+        # 2xxx = ACEPTADO con observación
+        # 3xxx = RECHAZADO
+        # 4xxx = RECHAZADO (error estructural)
+        # Sin código → usar estado que reporta MiPSE
+        if codigo_sunat.startswith(('3', '4')):
             comprobante.estado = 'RECHAZADO'
-        elif estado_sunat in ('ACEPTADO', 'ACEPTADO CON OBSERVACIONES') or codigo_sunat.startswith(('0', '2', '3')):
+        elif codigo_sunat.startswith(('0', '2')):
+            comprobante.estado = 'ACEPTADO'
+        elif estado_sunat in ('ACEPTADO', 'ACEPTADO CON OBSERVACIONES'):
             comprobante.estado = 'ACEPTADO'
         elif estado_sunat == 'RECHAZADO':
             comprobante.estado = 'RECHAZADO'
