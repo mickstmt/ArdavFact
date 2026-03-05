@@ -6,11 +6,10 @@ Formato esperado:
   - Agrupación por PedidoId (columna A)
 
 Columnas Excel (0-indexed):
-  A(0)=PedidoId/N°Orden | C(2)=Fecha | F(5)=DNI/Doc | G(6)=Nombre cliente
-  H(7)=Descripción | I(8)=SKU | J(9)=Cantidad
-  K(10)=Venta Total Pedido PEN (total de la orden, referencia)
-  L(11)=Precio individual ítem CON IGV incluido
-  T(19)=Costo Envío (con IGV)
+  A(0)=PedidoId/N°Orden | C(2)=Fecha | G(6)=DNI/Doc | H(7)=Nombre cliente
+  I(8)=Descripción | J(9)=SKU | K(10)=Cantidad
+  M(12)=Precio individual ítem CON IGV incluido (ya con descuento si aplica)
+  X(23)=Costo Envío (con IGV)
 """
 import logging
 from datetime import datetime
@@ -32,13 +31,13 @@ logger = logging.getLogger(__name__)
 # Índices de columna (0-based) — cabeceras en fila 4, datos desde fila 5
 _COL_ORDEN      = 0   # A - PedidoId (clave de agrupación y N° orden)
 _COL_FECHA      = 2   # C - Fecha del pedido
-_COL_DOC        = 5   # F - DNI / Doc. extranjería
-_COL_NOMBRE     = 6   # G - Nombre del cliente
-_COL_DESC       = 7   # H - Descripción del producto
-_COL_SKU        = 8   # I - SKU
-_COL_CANTIDAD   = 9   # J - Cantidad de unidades
-_COL_PRECIO     = 11  # L - Precio individual ítem (con IGV incluido)
-_COL_ENVIO      = 19  # T - Costo de envío (con IGV, desplazado por nueva col L)
+_COL_DOC        = 6   # G - DNI / RUC
+_COL_NOMBRE     = 7   # H - Nombre del cliente
+_COL_DESC       = 8   # I - Descripción del producto
+_COL_SKU        = 9   # J - SKU
+_COL_CANTIDAD   = 10  # K - Cantidad de unidades
+_COL_PRECIO     = 12  # M - Precio individual ítem (con IGV, ya con descuento si aplica)
+_COL_ENVIO      = 23  # X - Costo de envío (con IGV)
 
 _IGV_FACTOR = Decimal('1.18')
 
