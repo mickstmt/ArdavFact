@@ -55,6 +55,9 @@ class Comprobante(db.Model):
     codigo_sunat  = db.Column(db.String(10), nullable=True)
     external_id   = db.Column(db.String(100), nullable=True)    # MiPSE UUID
 
+    # === Origen del comprobante ===
+    es_bulk = db.Column(db.Boolean, nullable=False, default=False)  # True si vino de carga masiva
+
     # === Referencias para NC y ND ===
     comprobante_referencia_id = db.Column(
         db.Integer, db.ForeignKey('comprobantes.id'), nullable=True

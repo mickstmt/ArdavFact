@@ -58,6 +58,18 @@ def index():
     facturacion_mes = Decimal(str(totales_mes.facturacion))
     igv_mes = Decimal(str(totales_mes.igv))
 
+    # ── Total bulk del mes ──
+    total_bulk_mes = db.session.query(
+        func.coalesce(func.sum(Comprobante.total), 0)
+    ).filter(
+        Comprobante.es_bulk == True,
+        Comprobante.tipo_comprobante.in_(['FACTURA', 'BOLETA']),
+        Comprobante.estado.in_(estados_activos),
+        extract('month', Comprobante.fecha_emision) == mes,
+        extract('year',  Comprobante.fecha_emision) == anio,
+    ).scalar()
+    total_bulk_mes = Decimal(str(total_bulk_mes))
+
     # ── Gráfico semanal (últimas 8 semanas, agrupado por semana del año) ──
     semanas = db.session.query(
         extract('week', Comprobante.fecha_emision).label('semana'),
@@ -81,6 +93,7 @@ def index():
     )
 
     return render_template('dashboard/index.html',
+        total_bulk_mes=total_bulk_mes,
         facturas_mes=facturas_mes,
         boletas_mes=boletas_mes,
         nc_mes=nc_mes,

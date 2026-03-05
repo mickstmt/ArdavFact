@@ -365,6 +365,7 @@ def _crear_comprobante(
         costo_envio=costo_envio,
         estado='PENDIENTE',
         fecha_emision=fecha_emision,
+        es_bulk=True,
     )
     db.session.add(comp)
     db.session.flush()

@@ -42,28 +42,34 @@
 
 <!-- Resumen -->
 <div class="row g-3 mb-4" id="resumenCards">
-  <div class="col-6 col-md-3">
+  <div class="col-6 col-md-2">
     <div class="af-card p-3 text-center">
       <div class="fs-4 fw-bold" id="resTotal">—</div>
       <div class="small text-muted">Total órdenes</div>
     </div>
   </div>
-  <div class="col-6 col-md-3">
+  <div class="col-6 col-md-2">
     <div class="af-card p-3 text-center">
       <div class="fs-4 fw-bold text-success" id="resOK">—</div>
       <div class="small text-muted">OK</div>
     </div>
   </div>
-  <div class="col-6 col-md-3">
+  <div class="col-6 col-md-2">
     <div class="af-card p-3 text-center">
       <div class="fs-4 fw-bold text-warning" id="resWarning">—</div>
       <div class="small text-muted">Advertencias</div>
     </div>
   </div>
-  <div class="col-6 col-md-3">
+  <div class="col-6 col-md-2">
     <div class="af-card p-3 text-center">
       <div class="fs-4 fw-bold text-danger" id="resError">—</div>
       <div class="small text-muted">Errores</div>
+    </div>
+  </div>
+  <div class="col-12 col-md-4">
+    <div class="af-card p-3 text-center" style="border: 1px solid rgba(111,66,193,0.3); background: rgba(111,66,193,0.05);">
+      <div class="fs-4 fw-bold" id="resSeleccionado" style="color:#6f42c1;">S/ 0.00</div>
+      <div class="small text-muted"><span id="resSeleccionadoCount">0</span> seleccionadas — Total a procesar</div>
     </div>
   </div>
 </div>
@@ -174,6 +180,7 @@
     document.getElementById('resError').textContent = resumen.error ?? '';
 
     renderTabla(todasLasOrdenes);
+    actualizarTotalSeleccionado();
   });
 
   function renderTabla(ordenes) {
@@ -194,7 +201,7 @@
       const mensajes = [...(o.errores || []), ...(o.advertencias || [])].slice(0, 2).join(' / ');
 
       return `<tr data-orden="${o.numero_orden}" id="fila-${i}">
-      <td><input type="checkbox" class="form-check-input chk-orden" value="${i}" ${checked} ${disabled}></td>
+      <td><input type="checkbox" class="form-check-input chk-orden" value="${i}" ${checked} ${disabled} onchange="actualizarTotalSeleccionado()"></td>
       <td><span class="fw-semibold">${o.numero_orden}</span></td>
       <td>
         <div class="fw-semibold small">${o.nombre_cliente || '—'}</div>
@@ -219,6 +226,14 @@
 
   function toggleTodos(checked) {
     document.querySelectorAll('.chk-orden:not([disabled])').forEach(c => c.checked = checked);
+    actualizarTotalSeleccionado();
+  }
+
+  function actualizarTotalSeleccionado() {
+    const indices = [...document.querySelectorAll('.chk-orden:checked')].map(c => parseInt(c.value));
+    const total = indices.reduce((sum, i) => sum + parseFloat(todasLasOrdenes[i].total_estimado || 0), 0);
+    document.getElementById('resSeleccionado').textContent = 'S/ ' + total.toLocaleString('es-PE', {minimumFractionDigits:2, maximumFractionDigits:2});
+    document.getElementById('resSeleccionadoCount').textContent = indices.length;
   }
 
   function verDetalle(idx) {
