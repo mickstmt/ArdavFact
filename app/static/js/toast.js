@@ -15,12 +15,13 @@ const TOAST_ICONS = {
   info:    'bi-info-circle-fill',
 };
 
-function showToast(title, message, type = 'info', duration = 4500) {
+function showToast(title, message, type = 'info', duration = 4500, url = null) {
   const container = document.getElementById('toast-container');
   if (!container) return;
 
   const toast = document.createElement('div');
   toast.className = `af-toast toast-${type}`;
+  if (url) toast.style.cursor = 'pointer';
 
   const icon = TOAST_ICONS[type] || 'bi-bell-fill';
 
@@ -29,11 +30,16 @@ function showToast(title, message, type = 'info', duration = 4500) {
     <div style="flex:1; min-width:0;">
       <div class="af-toast-title">${title}</div>
       ${message ? `<div class="af-toast-msg">${message}</div>` : ''}
+      ${url ? `<div class="af-toast-msg" style="opacity:0.7;font-size:0.75em;">Click para ver detalle</div>` : ''}
     </div>
-    <button class="af-toast-close" onclick="this.closest('.af-toast').remove()" aria-label="Cerrar">
+    <button class="af-toast-close" onclick="event.stopPropagation();this.closest('.af-toast').remove()" aria-label="Cerrar">
       <i class="bi bi-x"></i>
     </button>
   `;
+
+  if (url) {
+    toast.addEventListener('click', () => window.location.href = url);
+  }
 
   container.appendChild(toast);
 
