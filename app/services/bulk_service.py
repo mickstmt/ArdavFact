@@ -152,11 +152,16 @@ def _analizar_orden(orden: dict, config: dict, cache_clientes: dict | None = Non
             errores.append(item_analizado['error'])
 
     # Verificar duplicado
-    ya_existe = Comprobante.query.filter_by(
-        numero_orden=orden['numero_orden']
-    ).first() is not None
-    if ya_existe:
-        errores.append(f'Orden {orden["numero_orden"]} ya tiene comprobante.')
+    comp_existente = Comprobante.query.filter_by(numero_orden=orden['numero_orden']).first()
+    ya_existe = comp_existente is not None
+    comprobante_rechazado_id = None
+    if comp_existente:
+        if comp_existente.estado == 'RECHAZADO':
+            # Permitir re-procesar: se eliminará el rechazado al crear el nuevo
+            ya_existe = False
+            comprobante_rechazado_id = comp_existente.id
+        else:
+            errores.append(f'Orden {orden["numero_orden"]} ya tiene comprobante.')
 
     # Totales provisionales
     total = sum(
@@ -181,7 +186,8 @@ def _analizar_orden(orden: dict, config: dict, cache_clientes: dict | None = Non
         'errores':         errores,
         'advertencias':    advertencias,
         'status':          status,
-        'ya_existe':       ya_existe,
+        'ya_existe':               ya_existe,
+        'comprobante_rechazado_id': comprobante_rechazado_id,
     }
 
 
@@ -260,8 +266,9 @@ def procesar_ordenes(
         if orden.get('status') == 'ERROR' or orden.get('ya_existe'):
             resultados.append({
                 'numero_orden': orden['numero_orden'],
-                'success': False,
-                'message': 'Omitida (ERROR o ya existe).',
+                'success':      False,
+                'estado':       None,
+                'message':      'Omitida (ERROR o ya existe).',
             })
             continue
 
@@ -348,6 +355,16 @@ def _crear_comprobante(
         except (ValueError, TypeError):
             pass
     fecha_emision = fecha_emision or datetime.utcnow()
+
+    # Eliminar comprobante RECHAZADO anterior si existe (re-proceso)
+    comp_rechazado_id = orden.get('comprobante_rechazado_id')
+    if comp_rechazado_id:
+        comp_ant = db.session.get(Comprobante, comp_rechazado_id)
+        if comp_ant and comp_ant.estado == 'RECHAZADO':
+            logger.info('[BULK] Eliminando comprobante RECHAZADO %s para re-emitir orden %s',
+                        comp_ant.numero_completo, orden['numero_orden'])
+            db.session.delete(comp_ant)
+            db.session.flush()
 
     tipo_doc_sunat = '01' if tipo_comprobante == 'FACTURA' else '03'
     correlativo = _siguiente_correlativo(serie)
