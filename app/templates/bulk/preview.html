@@ -128,8 +128,8 @@
 <div class="modal fade" id="modalResultados" tabindex="-1" data-bs-backdrop="static">
   <div class="modal-dialog modal-lg">
     <div class="modal-content">
-      <div class="modal-header bg-success text-white">
-        <h5 class="modal-title"><i class="bi bi-check2-circle me-2"></i>Resultado del procesamiento</h5>
+      <div class="modal-header bg-success text-white" id="modalResultadosHeader">
+        <h5 class="modal-title" id="modalResultadosTitulo"><i class="bi bi-check2-circle me-2"></i>Resultado del procesamiento</h5>
       </div>
       <div class="modal-body" id="modalResultadosBody"></div>
       <div class="modal-footer">
@@ -335,17 +335,25 @@
   }
 
   function mostrarResultados(data) {
-    const filas = (data.resultados || []).map(r => `
-    <tr class="${r.success ? 'table-success' : 'table-danger'}">
+    const resultados = data.resultados || [];
+    const rechazados = resultados.filter(r => r.estado === 'RECHAZADO').length;
+    const hayProblemas = data.fallidos > 0 || rechazados > 0;
+
+    const filas = resultados.map(r => {
+      const rechazado = r.estado === 'RECHAZADO';
+      const rowClass = !r.success ? 'table-danger' : rechazado ? 'table-warning' : 'table-success';
+      return `
+    <tr class="${rowClass}">
       <td>${r.numero_orden}</td>
       <td>${r.numero || '—'}</td>
       <td>${r.estado || '—'}</td>
       <td>${r.message}</td>
-    </tr>`).join('');
+    </tr>`;
+    }).join('');
 
     document.getElementById('modalResultadosBody').innerHTML = `
-    <div class="alert ${data.fallidos > 0 ? 'alert-warning' : 'alert-success'} mb-3">
-      ${data.message}
+    <div class="alert ${hayProblemas ? 'alert-warning' : 'alert-success'} mb-3">
+      ${data.message}${rechazados > 0 ? ` <strong>(${rechazados} rechazado${rechazados > 1 ? 's' : ''} por SUNAT)</strong>` : ''}
     </div>
     <table class="table table-sm table-bordered">
       <thead class="table-light">
@@ -353,6 +361,16 @@
       </thead>
       <tbody>${filas}</tbody>
     </table>`;
+
+    const header = document.getElementById('modalResultadosHeader');
+    const titulo = document.getElementById('modalResultadosTitulo');
+    if (hayProblemas) {
+      header.className = 'modal-header bg-warning text-dark';
+      titulo.innerHTML = '<i class="bi bi-exclamation-triangle me-2"></i>Resultado del procesamiento';
+    } else {
+      header.className = 'modal-header bg-success text-white';
+      titulo.innerHTML = '<i class="bi bi-check2-circle me-2"></i>Resultado del procesamiento';
+    }
 
     // Limpiar sessionStorage
     sessionStorage.removeItem('bulk_ordenes');
