@@ -300,16 +300,29 @@ def _seccion_items(comp, styles) -> list:
 def _seccion_totales_y_qr(comp, cfg, styles) -> list:
     """Tabla dos columnas: QR a la izq, totales a la der."""
     # ── Totales ──
+    # Separar envío de los ítems para mostrar Op. Gravadas e IGV solo de líneas
+    from decimal import Decimal as _Dec, ROUND_HALF_UP as _RHU
+    envio = _Dec(str(comp.costo_envio or 0))
+    if envio > 0:
+        envio_sin_igv = (envio / _Dec('1.18')).quantize(_Dec('0.01'), _RHU)
+        envio_igv = envio - envio_sin_igv
+    else:
+        envio_sin_igv = _Dec('0.00')
+        envio_igv = _Dec('0.00')
+
+    gravadas_items = _Dec(str(comp.total_operaciones_gravadas or 0)) - envio_sin_igv
+    igv_items = _Dec(str(comp.total_igv or 0)) - envio_igv
+
     rows_totales = [
-        ('Op. Gravadas', _fmt(comp.total_operaciones_gravadas)),
+        ('Op. Gravadas', _fmt(gravadas_items)),
         ('Op. Exoneradas', _fmt(comp.total_operaciones_exoneradas)),
         ('Op. Inafectas', _fmt(comp.total_operaciones_inafectas)),
     ]
     if comp.descuento and comp.descuento > 0:
         rows_totales.append(('(-) Descuento', _fmt(comp.descuento)))
-    rows_totales.append(('I.G.V. 18%', _fmt(comp.total_igv)))
-    if comp.costo_envio and comp.costo_envio > 0:
-        rows_totales.append(('Envío (gravado)', _fmt(comp.costo_envio)))
+    rows_totales.append(('I.G.V. 18%', _fmt(igv_items)))
+    if envio > 0:
+        rows_totales.append(('Envío (gravado)', _fmt(envio)))
 
     rows_totales.append(None)  # separador
     rows_totales.append(('IMPORTE TOTAL', f'S/ {_fmt(comp.total)}'))
