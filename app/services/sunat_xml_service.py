@@ -163,12 +163,12 @@ def _generar_invoice(comprobante) -> etree.Element:
     _add_supplier_party(root, cfg)
     _add_customer_party(root, cliente)
     _add_payment_terms(root, comprobante)
-    _add_charge_global(root, comprobante)
     _add_tax_total(root, comprobante)
     _add_legal_monetary_total(root, comprobante)
 
     for idx, item in enumerate(comprobante.items, start=1):
         _add_invoice_line(root, item, idx)
+    _add_invoice_line_envio(root, comprobante, len(comprobante.items) + 1)
 
     return root
 
@@ -415,34 +415,22 @@ def _add_payment_terms(root: etree.Element, comprobante):
 def _add_tax_total(root: etree.Element, comprobante):
     """TaxTotal global del comprobante.
 
-    SUNAT (4299/4290): TaxableAmount y TaxAmount deben coincidir con la suma
-    de los TaxTotal de línea — NO incluir el envío (va como AllowanceCharge).
+    El envío se agrega como InvoiceLine, por lo que total_operaciones_gravadas
+    y total_igv ya lo incluyen. TaxSubtotal/TaxableAmount coincidirá con la
+    suma de TaxableAmount de todas las líneas (ítems + envío).
     """
     tt = _cac(root, 'TaxTotal')
+    igv_total = _d(comprobante.total_igv)
+    _amt(tt, 'TaxAmount', igv_total)
 
-    # Separar IGV y base del envío para excluirlos del TaxTotal de líneas
-    envio = _d(comprobante.costo_envio)
-    if envio > 0:
-        envio_sin_igv = (envio / Decimal('1.18')).quantize(Decimal('0.01'), ROUND_HALF_UP)
-        envio_igv = envio - envio_sin_igv
-    else:
-        envio_sin_igv = Decimal('0.00')
-        envio_igv = Decimal('0.00')
+    gravadas = _d(comprobante.total_operaciones_gravadas)
+    if gravadas > 0:
+        _add_tax_subtotal(tt, gravadas, igv_total, '10')
 
-    igv_items = (_d(comprobante.total_igv) - envio_igv).quantize(Decimal('0.01'), ROUND_HALF_UP)
-    _amt(tt, 'TaxAmount', igv_items)
-
-    # Subtotal gravado (IGV 18%) — solo ítems, sin envío
-    gravadas_items = (_d(comprobante.total_operaciones_gravadas) - envio_sin_igv).quantize(Decimal('0.01'), ROUND_HALF_UP)
-    if gravadas_items > 0:
-        _add_tax_subtotal(tt, gravadas_items, igv_items, '10')
-
-    # Subtotal exonerado
     exoneradas = _d(comprobante.total_operaciones_exoneradas)
     if exoneradas > 0:
         _add_tax_subtotal(tt, exoneradas, Decimal('0.00'), '20')
 
-    # Subtotal inafecto
     inafectas = _d(comprobante.total_operaciones_inafectas)
     if inafectas > 0:
         _add_tax_subtotal(tt, inafectas, Decimal('0.00'), '30')
@@ -467,39 +455,24 @@ def _add_tax_subtotal(parent: etree.Element, base: Decimal, igv: Decimal, afecta
 def _add_legal_monetary_total(root: etree.Element, comprobante):
     """LegalMonetaryTotal — totales monetarios finales.
 
-    Reglas SUNAT:
-      4309: LineExtensionAmount = suma LineExtensionAmount de líneas (sin envío)
-      4310: TaxInclusiveAmount  = LineExtensionAmount + TaxTotal/TaxAmount (sin envío)
-      4308: ChargeTotalAmount   = suma AllowanceCharge[ChargeIndicator=true]/Amount
-                                = costo_envio CON IGV
-      4312: PayableAmount       = TaxInclusiveAmount + ChargeTotalAmount
+    El envío se agrega como InvoiceLine, por lo que se incluye naturalmente
+    en gravadas e igv. LineExtensionAmount = suma de todas las líneas (ítems + envío).
+    TaxInclusiveAmount = LineExtensionAmount + TaxAmount.
+    PayableAmount = total (ya incluye envío, sin necesidad de ChargeTotalAmount).
     """
     lmt = _cac(root, 'LegalMonetaryTotal')
+    gravadas   = _d(comprobante.total_operaciones_gravadas)
+    exoneradas = _d(comprobante.total_operaciones_exoneradas)
+    inafectas  = _d(comprobante.total_operaciones_inafectas)
+    igv        = _d(comprobante.total_igv)
+    total      = _d(comprobante.total)
 
-    envio = _d(comprobante.costo_envio)
-    if envio > 0:
-        envio_sin_igv = (envio / Decimal('1.18')).quantize(Decimal('0.01'), ROUND_HALF_UP)
-        envio_igv = envio - envio_sin_igv
-    else:
-        envio_sin_igv = Decimal('0.00')
-        envio_igv = Decimal('0.00')
-
-    # Valores solo de ítems (excluir envío)
-    gravadas_items = (_d(comprobante.total_operaciones_gravadas) - envio_sin_igv).quantize(Decimal('0.01'), ROUND_HALF_UP)
-    exoneradas     = _d(comprobante.total_operaciones_exoneradas)
-    inafectas      = _d(comprobante.total_operaciones_inafectas)
-    igv_items      = (_d(comprobante.total_igv) - envio_igv).quantize(Decimal('0.01'), ROUND_HALF_UP)
-
-    line_ext      = (gravadas_items + exoneradas + inafectas).quantize(Decimal('0.01'), ROUND_HALF_UP)
-    tax_inclusive = (line_ext + igv_items).quantize(Decimal('0.01'), ROUND_HALF_UP)
+    line_ext    = (gravadas + exoneradas + inafectas).quantize(Decimal('0.01'))
+    tax_inclusive = (line_ext + igv).quantize(Decimal('0.01'))
 
     _amt(lmt, 'LineExtensionAmount', line_ext)
     _amt(lmt, 'TaxInclusiveAmount', tax_inclusive)
-
-    if envio > 0:
-        _amt(lmt, 'ChargeTotalAmount', envio)  # CON IGV — coincide con AllowanceCharge/Amount
-
-    _amt(lmt, 'PayableAmount', _d(comprobante.total))
+    _amt(lmt, 'PayableAmount', total)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -558,6 +531,65 @@ def _add_debit_note_line(root: etree.Element, item, idx: int):
     _add_item_description(line, item)
     price = _cac(line, 'Price')
     _amt(price, 'PriceAmount', _d(item.precio_unitario_sin_igv))
+
+
+def _add_invoice_line_envio(root: etree.Element, comprobante, idx: int):
+    """InvoiceLine para el costo de envío.
+
+    SUNAT no acepta AllowanceCharge con ChargeIndicator=true (error 3114).
+    La forma correcta es agregar el envío como una línea más del comprobante.
+    Así TaxTotal/TaxableAmount = suma de todas las líneas incluyendo envío,
+    y no hay necesidad de ChargeTotalAmount en LegalMonetaryTotal.
+    """
+    envio = _d(comprobante.costo_envio)
+    if envio <= Decimal('0'):
+        return
+
+    envio_sin_igv = (envio / Decimal('1.18')).quantize(Decimal('0.01'), ROUND_HALF_UP)
+    envio_igv = envio - envio_sin_igv
+
+    line = _cac(root, 'InvoiceLine')
+    _cbc(line, 'ID', str(idx))
+
+    qty_el = _cbc(line, 'InvoicedQuantity', '1.00')
+    qty_el.set('unitCode', 'ZZ')
+    qty_el.set('unitCodeListAgencyName', 'United Nations Economic Commission for Europe')
+    qty_el.set('unitCodeListID', 'UN/ECE rec 20')
+
+    _amt(line, 'LineExtensionAmount', envio_sin_igv)
+
+    pr = _cac(line, 'PricingReference')
+    acp = _cac(pr, 'AlternativeConditionPrice')
+    _amt(acp, 'PriceAmount', envio)
+    ptc = _cbc(acp, 'PriceTypeCode', '01')
+    ptc.set('listAgencyName', 'PE:SUNAT')
+    ptc.set('listName', 'Tipo de Precio')
+    ptc.set('listURI', 'urn:pe:gob:sunat:cpe:see:gem:catalogos:catalogo16')
+
+    tt = _cac(line, 'TaxTotal')
+    _amt(tt, 'TaxAmount', envio_igv)
+    ts = _cac(tt, 'TaxSubtotal')
+    _amt(ts, 'TaxableAmount', envio_sin_igv)
+    _amt(ts, 'TaxAmount', envio_igv)
+    tc = _cac(ts, 'TaxCategory')
+    _cbc(tc, 'Percent', '18.00')
+    erc = _cbc(tc, 'TaxExemptionReasonCode', '10')
+    erc.set('listAgencyName', 'PE:SUNAT')
+    erc.set('listName', 'Afectacion del IGV')
+    erc.set('listURI', 'urn:pe:gob:sunat:cpe:see:gem:catalogos:catalogo07')
+    tscheme = _cac(tc, 'TaxScheme')
+    tid = _cbc(tscheme, 'ID', '1000')
+    tid.set('schemeAgencyName', 'PE:SUNAT')
+    tid.set('schemeID', 'UN/ECE 5153')
+    tid.set('schemeName', 'Codigo de tributos')
+    _cbc(tscheme, 'Name', 'IGV')
+    _cbc(tscheme, 'TaxTypeCode', 'VAT')
+
+    it = _cac(line, 'Item')
+    _cbc(it, 'Description', 'Costo de Envío')
+
+    price = _cac(line, 'Price')
+    _amt(price, 'PriceAmount', envio_sin_igv)
 
 
 def _add_pricing_reference(line: etree.Element, item):
