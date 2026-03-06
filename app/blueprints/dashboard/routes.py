@@ -1,7 +1,7 @@
 """Rutas del dashboard principal."""
 from datetime import datetime, date
 from decimal import Decimal
-from flask import render_template
+from flask import render_template, request
 from flask_login import login_required, current_user
 from sqlalchemy import func, extract
 from app.extensions import db
@@ -13,8 +13,27 @@ from . import dashboard_bp
 @login_required
 def index():
     hoy = date.today()
-    mes = hoy.month
-    anio = hoy.year
+    try:
+        mes  = int(request.args.get('mes',  hoy.month))
+        anio = int(request.args.get('anio', hoy.year))
+        if not (1 <= mes <= 12):
+            mes = hoy.month
+        if anio < 2000:
+            anio = hoy.year
+    except (ValueError, TypeError):
+        mes, anio = hoy.month, hoy.year
+
+    es_mes_actual = (mes == hoy.month and anio == hoy.year)
+
+    # Navegación prev/next
+    if mes == 1:
+        mes_prev, anio_prev = 12, anio - 1
+    else:
+        mes_prev, anio_prev = mes - 1, anio
+    if mes == 12:
+        mes_next, anio_next = 1, anio + 1
+    else:
+        mes_next, anio_next = mes + 1, anio
 
     # Estados activos (excluye borradores y rechazados para conteo de emisión)
     estados_activos = ['PENDIENTE', 'ENVIADO', 'ACEPTADO']
@@ -92,6 +111,8 @@ def index():
         .all()
     )
 
+    mes_nombre = date(anio, mes, 1).strftime('%B %Y')
+
     return render_template('dashboard/index.html',
         total_bulk_mes=total_bulk_mes,
         facturas_mes=facturas_mes,
@@ -104,5 +125,8 @@ def index():
         grafico_labels=grafico_labels,
         grafico_data=grafico_data,
         ultimos=ultimos,
-        mes_nombre=hoy.strftime('%B %Y'),
+        mes_nombre=mes_nombre,
+        es_mes_actual=es_mes_actual,
+        mes_prev=mes_prev, anio_prev=anio_prev,
+        mes_next=mes_next, anio_next=anio_next,
     )
