@@ -1,0 +1,405 @@
+{% extends 'base.html' %}
+{% block title %}Preview Carga Masiva Falabella{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+  <div>
+    <h4 class="mb-0 fw-semibold">Vista Previa — Carga Masiva Falabella</h4>
+    <p class="text-muted mb-0 small">Revisa las órdenes antes de procesarlas.</p>
+  </div>
+  <div class="d-flex gap-2">
+    <a href="{{ url_for('bulk_falabella.upload') }}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-arrow-left me-1"></i>Cargar otro archivo
+    </a>
+    <button id="btnProcesar" class="btn btn-success btn-sm" onclick="procesarOrdenes()">
+      <i class="bi bi-send-fill me-1"></i>Procesar seleccionadas
+    </button>
+  </div>
+</div>
+
+<!-- Selector de fecha de emisión -->
+<div class="af-card p-3 mb-4">
+  <div class="row align-items-center g-2 flex-wrap">
+    <div class="col-auto">
+      <div class="form-check form-switch mb-0">
+        <input class="form-check-input" type="checkbox" id="toggleFechaOverride" onchange="onToggleFecha(this.checked)">
+        <label class="form-check-label fw-semibold" for="toggleFechaOverride" style="font-size:0.85rem;">
+          <i class="bi bi-calendar-date me-1 text-primary"></i>Usar fecha personalizada
+        </label>
+      </div>
+    </div>
+    <div class="col-auto" id="fechaInputWrapper" style="opacity:0.4; pointer-events:none;">
+      <input type="date" id="fechaEmisionOverride" class="form-control form-control-sm" style="min-width:160px;">
+    </div>
+    <div class="col">
+      <span class="text-muted" id="fechaHint" style="font-size:0.78rem;">
+        <i class="bi bi-info-circle"></i>
+        Activa el toggle para usar una fecha única en <strong>todos</strong> los comprobantes. Si está desactivado se respetará la fecha de cada orden del Excel.
+      </span>
+    </div>
+  </div>
+</div>
+
+<!-- Resumen -->
+<div class="row g-3 mb-4" id="resumenCards">
+  <div class="col-6 col-md-2">
+    <div class="af-card p-3 text-center">
+      <div class="fs-4 fw-bold" id="resTotal">—</div>
+      <div class="small text-muted">Total órdenes</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-2">
+    <div class="af-card p-3 text-center">
+      <div class="fs-4 fw-bold text-success" id="resOK">—</div>
+      <div class="small text-muted">OK</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-2">
+    <div class="af-card p-3 text-center">
+      <div class="fs-4 fw-bold text-warning" id="resWarning">—</div>
+      <div class="small text-muted">Advertencias</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-2">
+    <div class="af-card p-3 text-center">
+      <div class="fs-4 fw-bold text-danger" id="resError">—</div>
+      <div class="small text-muted">Errores</div>
+    </div>
+  </div>
+  <div class="col-12 col-md-4">
+    <div class="af-card p-3 text-center" style="border: 1px solid rgba(111,66,193,0.3); background: rgba(111,66,193,0.05);">
+      <div class="fs-4 fw-bold" id="resSeleccionado" style="color:#6f42c1;">S/ 0.00</div>
+      <div class="small text-muted"><span id="resSeleccionadoCount">0</span> seleccionadas — Total a procesar</div>
+    </div>
+  </div>
+</div>
+
+<!-- Barra de progreso (oculta hasta procesar) -->
+<div id="progresoBox" class="d-none mb-4">
+  <div class="d-flex justify-content-between mb-1 small">
+    <span>Procesando comprobantes…</span>
+    <span id="progresoTexto">0 / 0</span>
+  </div>
+  <div class="progress" style="height: 8px;">
+    <div id="progresoBarra" class="progress-bar progress-bar-striped progress-bar-animated" style="width: 0%;"></div>
+  </div>
+</div>
+
+<!-- Tabla de órdenes -->
+<div class="af-card overflow-auto">
+  <table class="table table-sm align-middle mb-0" id="tablaOrdenes">
+    <thead>
+      <tr>
+        <th style="width:32px;">
+          <input type="checkbox" id="chkTodos" onchange="toggleTodos(this.checked)" class="form-check-input">
+        </th>
+        <th>N° Orden</th>
+        <th>Cliente / Documento</th>
+        <th>Tipo</th>
+        <th class="text-end">Total Est.</th>
+        <th>Estado</th>
+        <th>Detalle</th>
+      </tr>
+    </thead>
+    <tbody id="tbodyOrdenes">
+      <tr>
+        <td colspan="7" class="text-center text-muted py-4">
+          <span class="spinner-border spinner-border-sm me-2"></span> Cargando…
+        </td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- Modal detalle ítem -->
+<div class="modal fade" id="modalDetalle" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalTitulo">Detalle orden</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="modalBody"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal resultados procesamiento -->
+<div class="modal fade" id="modalResultados" tabindex="-1" data-bs-backdrop="static">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header bg-success text-white" id="modalResultadosHeader">
+        <h5 class="modal-title" id="modalResultadosTitulo"><i class="bi bi-check2-circle me-2"></i>Resultado del procesamiento</h5>
+      </div>
+      <div class="modal-body" id="modalResultadosBody"></div>
+      <div class="modal-footer">
+        <a href="{{ url_for('ventas.lista_ventas') }}" class="btn btn-primary">
+          <i class="bi bi-list-ul me-1"></i>Ver comprobantes
+        </a>
+        <a href="{{ url_for('bulk_falabella.upload') }}" class="btn btn-outline-secondary">
+          <i class="bi bi-upload me-1"></i>Cargar otro archivo
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+
+{% block extra_js %}
+<script>
+  let todasLasOrdenes = [];
+
+  function onToggleFecha(activo) {
+    const wrapper = document.getElementById('fechaInputWrapper');
+    wrapper.style.opacity       = activo ? '1'    : '0.4';
+    wrapper.style.pointerEvents = activo ? 'auto' : 'none';
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    const hoy = new Date();
+    const yyyy = hoy.getFullYear();
+    const mm   = String(hoy.getMonth() + 1).padStart(2, '0');
+    const dd   = String(hoy.getDate()).padStart(2, '0');
+    document.getElementById('fechaEmisionOverride').value = `${yyyy}-${mm}-${dd}`;
+
+    const ordenesRaw = sessionStorage.getItem('bulk_fal_ordenes');
+    const resumenRaw = sessionStorage.getItem('bulk_fal_resumen');
+
+    if (!ordenesRaw) {
+      document.getElementById('tbodyOrdenes').innerHTML =
+        '<tr><td colspan="7" class="text-center text-danger py-4">No hay datos de análisis. <a href="{{ url_for("bulk_falabella.upload") }}">Cargar archivo</a></td></tr>';
+      return;
+    }
+
+    todasLasOrdenes = JSON.parse(ordenesRaw);
+    const resumen = resumenRaw ? JSON.parse(resumenRaw) : {};
+
+    document.getElementById('resTotal').textContent = resumen.total ?? todasLasOrdenes.length;
+    document.getElementById('resOK').textContent = resumen.ok ?? '';
+    document.getElementById('resWarning').textContent = resumen.warning ?? '';
+    document.getElementById('resError').textContent = resumen.error ?? '';
+
+    renderTabla(todasLasOrdenes);
+    actualizarTotalSeleccionado();
+  });
+
+  function renderTabla(ordenes) {
+    const tbody = document.getElementById('tbodyOrdenes');
+    if (!ordenes.length) {
+      tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4">Sin órdenes.</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = ordenes.map((o, i) => {
+      const disabled = o.status === 'ERROR' || o.ya_existe ? 'disabled' : '';
+      const checked = o.status !== 'ERROR' && !o.ya_existe ? 'checked' : '';
+      const badgeClass = { OK: 'bg-success', WARNING: 'bg-warning text-dark', ERROR: 'bg-danger' }[o.status] || 'bg-secondary';
+      const tipoBadge = o.tipo_comprobante === 'FACTURA'
+        ? '<span class="badge bg-primary">Factura</span>'
+        : '<span class="badge bg-secondary">Boleta</span>';
+
+      const mensajes = [...(o.errores || []), ...(o.advertencias || [])].slice(0, 2).join(' / ');
+
+      return `<tr data-orden="${o.numero_orden}" id="fila-${i}">
+      <td><input type="checkbox" class="form-check-input chk-orden" value="${i}" ${checked} ${disabled} onchange="actualizarTotalSeleccionado()"></td>
+      <td><span class="fw-semibold">${o.numero_orden}</span></td>
+      <td>
+        <div class="fw-semibold small">${o.nombre_cliente || '—'}</div>
+        <div class="text-muted" style="font-size:.78rem;">${o.numero_documento || ''}</div>
+      </td>
+      <td>${tipoBadge}</td>
+      <td class="text-end fw-semibold">S/ ${parseFloat(o.total_estimado || 0).toFixed(2)}</td>
+      <td>
+        <span class="badge ${badgeClass}">${o.status}</span>
+        ${o.ya_existe ? '<span class="badge bg-dark ms-1">Ya existe</span>' : ''}
+        ${mensajes ? `<div class="text-muted mt-1" style="font-size:.75rem;">${mensajes}</div>` : ''}
+      </td>
+      <td>
+        <button class="btn btn-xs btn-outline-secondary py-0 px-2"
+                onclick="verDetalle(${i})" style="font-size:.78rem;">
+          <i class="bi bi-eye"></i> Ver
+        </button>
+      </td>
+    </tr>`;
+    }).join('');
+  }
+
+  function toggleTodos(checked) {
+    document.querySelectorAll('.chk-orden:not([disabled])').forEach(c => c.checked = checked);
+    actualizarTotalSeleccionado();
+  }
+
+  function actualizarTotalSeleccionado() {
+    const indices = [...document.querySelectorAll('.chk-orden:checked')].map(c => parseInt(c.value));
+    const total = indices.reduce((sum, i) => sum + parseFloat(todasLasOrdenes[i].total_estimado || 0), 0);
+    document.getElementById('resSeleccionado').textContent = 'S/ ' + total.toLocaleString('es-PE', {minimumFractionDigits:2, maximumFractionDigits:2});
+    document.getElementById('resSeleccionadoCount').textContent = indices.length;
+  }
+
+  function verDetalle(idx) {
+    const o = todasLasOrdenes[idx];
+    document.getElementById('modalTitulo').textContent = `Orden ${o.numero_orden}`;
+
+    const filas = (o.items || []).map(it => `
+    <tr class="${it.error ? 'table-danger' : ''}">
+      <td>${it.sku || '—'}</td>
+      <td>${it.descripcion}</td>
+      <td class="text-center">${parseFloat(it.cantidad || 1).toFixed(0)}</td>
+      <td class="text-end">S/ ${parseFloat(it.precio_sin_igv || 0).toFixed(2)}</td>
+      <td class="text-end">S/ ${parseFloat(it.igv_total || 0).toFixed(2)}</td>
+      <td class="text-end fw-semibold">S/ ${parseFloat(it.subtotal_con_igv || 0).toFixed(2)}</td>
+      <td>${it.error ? `<span class="text-danger small">${it.error}</span>` : '<i class="bi bi-check-circle-fill text-success"></i>'}</td>
+    </tr>`).join('');
+
+    const errMsgs = [...(o.errores || []).map(e => `<li class="text-danger">${e}</li>`),
+    ...(o.advertencias || []).map(e => `<li class="text-warning">${e}</li>`)].join('');
+
+    document.getElementById('modalBody').innerHTML = `
+    ${errMsgs ? `<ul class="mb-3 small ps-3">${errMsgs}</ul>` : ''}
+    <table class="table table-sm table-bordered">
+      <thead class="table-light">
+        <tr><th>SKU</th><th>Descripción</th><th class="text-center">Cant.</th>
+            <th class="text-end">Base</th>
+            <th class="text-end">IGV</th><th class="text-end">Total</th><th></th></tr>
+      </thead>
+      <tbody>${filas || '<tr><td colspan="7" class="text-center text-muted">Sin ítems</td></tr>'}</tbody>
+    </table>
+    <div class="text-end">
+      <strong>Costo envío:</strong> S/ ${parseFloat(o.costo_envio || 0).toFixed(2)} &nbsp;|&nbsp;
+      <strong>Total estimado:</strong> S/ ${parseFloat(o.total_estimado || 0).toFixed(2)}
+    </div>`;
+
+    new bootstrap.Modal(document.getElementById('modalDetalle')).show();
+  }
+
+  async function procesarOrdenes() {
+    const seleccionados = [...document.querySelectorAll('.chk-orden:checked')]
+      .map(c => todasLasOrdenes[parseInt(c.value)]);
+
+    if (!seleccionados.length) {
+      showToast('Aviso', 'Selecciona al menos una orden para procesar.', 'warning');
+      return;
+    }
+
+    const toggleActivo  = document.getElementById('toggleFechaOverride').checked;
+    const fechaOverride = toggleActivo ? (document.getElementById('fechaEmisionOverride').value || null) : null;
+
+    const confirmado = await Swal.fire(
+      fechaOverride
+        ? {
+            title: `¿Procesar ${seleccionados.length} orden(es)?`,
+            html: `<div style="text-align:left; font-size:0.9rem;">
+              <div>Se crearán comprobantes y se enviarán a SUNAT.</div>
+              <div style="margin-top:0.5rem;">
+                <i class="bi bi-calendar-check text-success"></i>
+                <strong> Fecha de emisión:</strong> ${fechaOverride}
+              </div>
+              <div style="margin-top:0.3rem; font-size:0.82rem; color:#6c757d;">
+                Esta fecha se aplicará a todos los comprobantes seleccionados.
+              </div>
+            </div>`,
+            icon: 'question',
+            confirmButtonText: 'Sí, procesar',
+            confirmButtonColor: '#198754',
+            showCancelButton: true,
+            cancelButtonText: 'Cancelar',
+          }
+        : {
+            title: '¿Procesar sin fecha personalizada?',
+            html: `<div style="text-align:left; font-size:0.9rem;">
+              <div>No has activado la fecha personalizada.</div>
+              <div style="margin-top:0.5rem;">
+                <i class="bi bi-calendar-x text-warning"></i>
+                <strong> Se usará la fecha de cada orden del Excel.</strong>
+              </div>
+              <div style="margin-top:0.3rem; font-size:0.82rem; color:#6c757d;">
+                Si deseas emitirlas con otra fecha, cancela y activa el toggle.
+              </div>
+            </div>`,
+            icon: 'warning',
+            confirmButtonText: 'Sí, usar fechas del Excel',
+            confirmButtonColor: '#fd7e14',
+            showCancelButton: true,
+            cancelButtonText: 'Cancelar',
+          }
+    );
+    if (!confirmado.isConfirmed) return;
+
+    const btnProcesar = document.getElementById('btnProcesar');
+    btnProcesar.disabled = true;
+    const progresoBox = document.getElementById('progresoBox');
+    progresoBox.classList.remove('d-none');
+
+    let fakeP = 0;
+    const interval = setInterval(() => {
+      fakeP = Math.min(fakeP + 2, 85);
+      document.getElementById('progresoBarra').style.width = fakeP + '%';
+      document.getElementById('progresoTexto').textContent = `${Math.round(fakeP * seleccionados.length / 100)} / ${seleccionados.length}`;
+    }, 300);
+
+    try {
+      const data = await afFetch('{{ url_for("bulk_falabella.procesar") }}', {
+        method: 'POST',
+        body: { ordenes: seleccionados, fecha_override: fechaOverride },
+      });
+
+      clearInterval(interval);
+      document.getElementById('progresoBarra').style.width = '100%';
+      document.getElementById('progresoTexto').textContent = `${seleccionados.length} / ${seleccionados.length}`;
+
+      mostrarResultados(data);
+
+    } catch (e) {
+      clearInterval(interval);
+      showToast('Error', 'Error de red al procesar: ' + e.message, 'danger');
+    } finally {
+      btnProcesar.disabled = false;
+    }
+  }
+
+  function mostrarResultados(data) {
+    const resultados = data.resultados || [];
+    const rechazados = resultados.filter(r => r.estado === 'RECHAZADO').length;
+    const hayProblemas = data.fallidos > 0 || rechazados > 0;
+
+    const filas = resultados.map(r => {
+      const rechazado = r.estado === 'RECHAZADO';
+      const rowClass = !r.success ? 'table-danger' : rechazado ? 'table-warning' : 'table-success';
+      return `
+    <tr class="${rowClass}">
+      <td>${r.numero_orden}</td>
+      <td>${r.numero || '—'}</td>
+      <td>${r.estado || '—'}</td>
+      <td>${r.message}</td>
+    </tr>`;
+    }).join('');
+
+    document.getElementById('modalResultadosBody').innerHTML = `
+    <div class="alert ${hayProblemas ? 'alert-warning' : 'alert-success'} mb-3">
+      ${data.message}${rechazados > 0 ? ` <strong>(${rechazados} rechazado${rechazados > 1 ? 's' : ''} por SUNAT)</strong>` : ''}
+    </div>
+    <table class="table table-sm table-bordered">
+      <thead class="table-light">
+        <tr><th>N° Orden</th><th>Comprobante</th><th>Estado</th><th>Mensaje</th></tr>
+      </thead>
+      <tbody>${filas}</tbody>
+    </table>`;
+
+    const header = document.getElementById('modalResultadosHeader');
+    const titulo = document.getElementById('modalResultadosTitulo');
+    if (hayProblemas) {
+      header.className = 'modal-header bg-warning text-dark';
+      titulo.innerHTML = '<i class="bi bi-exclamation-triangle me-2"></i>Resultado del procesamiento';
+    } else {
+      header.className = 'modal-header bg-success text-white';
+      titulo.innerHTML = '<i class="bi bi-check2-circle me-2"></i>Resultado del procesamiento';
+    }
+
+    sessionStorage.removeItem('bulk_fal_ordenes');
+    sessionStorage.removeItem('bulk_fal_resumen');
+
+    new bootstrap.Modal(document.getElementById('modalResultados')).show();
+  }
+</script>
+{% endblock extra_js %}
