@@ -1,4 +1,4 @@
-"""Rutas de carga masiva desde Excel de WooCommerce."""
+"""Rutas de carga masiva desde Excel (WooCommerce, Falabella, MercadoLibre)."""
 import os
 import uuid
 
@@ -10,8 +10,14 @@ from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
 
 from app.decorators import requiere_permiso
-from app.services import bulk_service
+from app.services import bulk_service, bulk_falabella_service, bulk_meli_service
 from . import bulk_bp
+
+_SERVICIOS = {
+    'woo':       bulk_service,
+    'falabella': bulk_falabella_service,
+    'meli':      bulk_meli_service,
+}
 
 _ALLOWED_EXT = {'xlsx', 'xls'}
 
@@ -50,9 +56,12 @@ def analizar():
     nombre_temp = f'bulk_{uuid.uuid4().hex}.xlsx'
     ruta_temp = os.path.join(uploads_path, nombre_temp)
 
+    plataforma = request.form.get('plataforma', 'woo').strip().lower()
+    servicio = _SERVICIOS.get(plataforma, bulk_service)
+
     try:
         archivo.save(ruta_temp)
-        ordenes = bulk_service.analizar_excel(ruta_temp, current_app.config)
+        ordenes = servicio.analizar_excel(ruta_temp, current_app.config)
     except ValueError as exc:
         return jsonify({'success': False, 'message': str(exc)}), 400
     except Exception as exc:
@@ -67,8 +76,9 @@ def analizar():
     total_error   = sum(1 for o in ordenes if o['status'] == 'ERROR')
 
     return jsonify({
-        'success': True,
-        'ordenes': ordenes,
+        'success':    True,
+        'plataforma': plataforma,
+        'ordenes':    ordenes,
         'resumen': {
             'total':   len(ordenes),
             'ok':      total_ok,

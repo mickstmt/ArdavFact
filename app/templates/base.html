@@ -102,12 +102,8 @@
   {% if current_user.tiene_permiso('bulk.upload') %}
   <div class="af-sidebar-section">Operaciones</div>
   <a href="{{ url_for('bulk.upload') }}"
-     class="af-sidebar-link {% if request.blueprint == 'bulk' %}active{% endif %}">
-    <i class="bi bi-cloud-upload"></i>Carga Masiva WooCommerce
-  </a>
-  <a href="{{ url_for('bulk_falabella.upload') }}"
-     class="af-sidebar-link {% if request.blueprint == 'bulk_falabella' %}active{% endif %}">
-    <i class="bi bi-cloud-upload"></i>Carga Masiva Falabella
+     class="af-sidebar-link {% if request.blueprint in ('bulk', 'bulk_falabella') %}active{% endif %}">
+    <i class="bi bi-cloud-upload"></i>Carga Masiva
   </a>
   {% endif %}
 

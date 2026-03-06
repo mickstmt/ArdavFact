@@ -14,19 +14,29 @@
 
     <div class="af-card p-4">
 
-      <!-- Info columnas -->
+      <!-- Selector de plataforma -->
+      <div class="mb-4">
+        <label class="form-label fw-semibold">Plataforma</label>
+        <div class="d-flex gap-2 flex-wrap" id="plataformaSelector">
+          <input type="radio" class="btn-check" name="plataforma" id="plat_woo"       value="woo"       autocomplete="off" checked>
+          <label class="btn btn-outline-secondary" for="plat_woo">
+            <i class="bi bi-cart3 me-1"></i>WooCommerce
+          </label>
+          <input type="radio" class="btn-check" name="plataforma" id="plat_falabella" value="falabella" autocomplete="off">
+          <label class="btn btn-outline-secondary" for="plat_falabella">
+            <i class="bi bi-bag me-1"></i>Falabella
+          </label>
+          <input type="radio" class="btn-check" name="plataforma" id="plat_meli"      value="meli"      autocomplete="off">
+          <label class="btn btn-outline-secondary" for="plat_meli">
+            <i class="bi bi-shop me-1"></i>MercadoLibre
+          </label>
+        </div>
+      </div>
+
+      <!-- Info columnas (cambia según plataforma) -->
       <div class="alert alert-info d-flex gap-2 align-items-start mb-4" style="font-size:0.83rem;">
         <i class="bi bi-info-circle-fill mt-1 flex-shrink-0"></i>
-        <div>
-          <strong>Formato esperado:</strong> cabeceras en fila 4, datos desde fila 5.
-          <div class="mt-1 text-muted">
-            A=PedidoId &nbsp;|&nbsp; C=Fecha &nbsp;|&nbsp; G=DNI/RUC &nbsp;|&nbsp; H=Nombre cliente
-            &nbsp;|&nbsp; I=Descripción &nbsp;|&nbsp; J=SKU &nbsp;|&nbsp; K=Cantidad &nbsp;|&nbsp; M=Precio (con IGV) &nbsp;|&nbsp; X=Costo Envío
-          </div>
-          <div class="mt-1 text-muted" style="font-size:0.78rem;">
-            <i class="bi bi-diagram-2"></i> Las filas se agrupan por <strong>PedidoId (col. A)</strong> — una orden puede tener múltiples ítems.
-          </div>
-        </div>
+        <div id="infoColumnas"><!-- se rellena por JS --></div>
       </div>
 
       <!-- Zona drag & drop -->
@@ -81,6 +91,47 @@ const btnAnalizar = document.getElementById('btnAnalizar');
 const selBox      = document.getElementById('archivoSeleccionado');
 const nombreEl    = document.getElementById('nombreArchivo');
 let archivoSeleccionado = null;
+
+// ── Info columnas por plataforma ──────────────────────────────────────────
+const INFO_COLUMNAS = {
+  woo: `<strong>Formato WooCommerce:</strong> cabeceras en fila 4, datos desde fila 5.
+    <div class="mt-1 text-muted">
+      A=PedidoId &nbsp;|&nbsp; C=Fecha &nbsp;|&nbsp; G=DNI/RUC &nbsp;|&nbsp; H=Nombre cliente
+      &nbsp;|&nbsp; I=Descripción &nbsp;|&nbsp; J=SKU &nbsp;|&nbsp; K=Cantidad &nbsp;|&nbsp; M=Precio (con IGV) &nbsp;|&nbsp; X=Costo Envío
+    </div>
+    <div class="mt-1 text-muted" style="font-size:0.78rem;">
+      <i class="bi bi-diagram-2"></i> Filas agrupadas por <strong>PedidoId (col. A)</strong>.
+    </div>`,
+  falabella: `<strong>Formato Falabella:</strong> cabeceras en fila 1, datos desde fila 2.
+    <div class="mt-1 text-muted">
+      B=SKU &nbsp;|&nbsp; D=Fecha &nbsp;|&nbsp; E=N° Orden &nbsp;|&nbsp; J=Nombre cliente
+      &nbsp;|&nbsp; L=DNI/RUC &nbsp;|&nbsp; AJ=Precio ítem (con IGV) &nbsp;|&nbsp; AL=Costo Envío &nbsp;|&nbsp; AO=Descripción
+    </div>
+    <div class="mt-1 text-muted" style="font-size:0.78rem;">
+      <i class="bi bi-diagram-2"></i> Filas agrupadas por <strong>N° Orden (col. E)</strong>.
+    </div>`,
+  meli: `<strong>Formato MercadoLibre:</strong> cabeceras en fila 1, datos desde fila 2.
+    <div class="mt-1 text-muted">
+      A=N° Orden &nbsp;|&nbsp; G=Fecha &nbsp;|&nbsp; V=Costo Envío &nbsp;|&nbsp; AE=SKU
+      &nbsp;|&nbsp; AF=Variante &nbsp;|&nbsp; AH=Precio ítem (con IGV) &nbsp;|&nbsp; AI=Cantidad &nbsp;|&nbsp; AQ=Descripción &nbsp;|&nbsp; AU=Nombre cliente &nbsp;|&nbsp; AX=DNI/RUC
+    </div>
+    <div class="mt-1 text-muted" style="font-size:0.78rem;">
+      <i class="bi bi-diagram-2"></i> Filas agrupadas por <strong>N° Orden (col. A)</strong>. Datos generales sólo en la primera fila de cada grupo.
+    </div>`,
+};
+
+function getPlataforma() {
+  return document.querySelector('input[name="plataforma"]:checked')?.value || 'woo';
+}
+
+function actualizarInfoColumnas() {
+  document.getElementById('infoColumnas').innerHTML = INFO_COLUMNAS[getPlataforma()] || '';
+}
+
+document.querySelectorAll('input[name="plataforma"]').forEach(r => {
+  r.addEventListener('change', actualizarInfoColumnas);
+});
+actualizarInfoColumnas(); // inicial
 
 dropZone.addEventListener('dragover', e => {
   e.preventDefault();
@@ -137,6 +188,7 @@ async function analizarExcel() {
 
   const fd = new FormData();
   fd.append('archivo', archivoSeleccionado);
+  fd.append('plataforma', getPlataforma());
   fd.append('csrf_token', document.querySelector('meta[name="csrf-token"]').content);
 
   try {
@@ -148,8 +200,9 @@ async function analizarExcel() {
       return;
     }
 
-    sessionStorage.setItem('bulk_ordenes', JSON.stringify(data.ordenes));
-    sessionStorage.setItem('bulk_resumen', JSON.stringify(data.resumen));
+    sessionStorage.setItem('bulk_ordenes',    JSON.stringify(data.ordenes));
+    sessionStorage.setItem('bulk_resumen',    JSON.stringify(data.resumen));
+    sessionStorage.setItem('bulk_plataforma', data.plataforma || getPlataforma());
     window.location.href = '{{ url_for("bulk.preview") }}';
 
   } catch (e) {
