@@ -152,16 +152,28 @@ def _analizar_orden(orden: dict, config: dict, cache_clientes: dict | None = Non
             errores.append(item_analizado['error'])
 
     # Verificar duplicado
-    comp_existente = Comprobante.query.filter_by(numero_orden=orden['numero_orden']).first()
+    comp_existente = Comprobante.query.filter_by(numero_orden=orden['numero_orden'])\
+        .order_by(Comprobante.id.desc()).first()
     ya_existe = comp_existente is not None
     comprobante_rechazado_id = None
+    comprobante_anulado_id   = None
     if comp_existente:
         if comp_existente.estado == 'RECHAZADO':
             # Permitir re-procesar: se eliminará el rechazado al crear el nuevo
             ya_existe = False
             comprobante_rechazado_id = comp_existente.id
         else:
-            errores.append(f'Orden {orden["numero_orden"]} ya tiene comprobante.')
+            # ¿Fue anulada por una NC aceptada?
+            nc_anulacion = Comprobante.query.filter_by(
+                comprobante_referencia_id=comp_existente.id,
+                tipo_comprobante='NOTA_CREDITO',
+                estado='ACEPTADO',
+            ).first()
+            if nc_anulacion:
+                ya_existe = False
+                comprobante_anulado_id = comp_existente.id
+            else:
+                errores.append(f'Orden {orden["numero_orden"]} ya tiene comprobante.')
 
     # Totales provisionales
     total = sum(
@@ -188,6 +200,7 @@ def _analizar_orden(orden: dict, config: dict, cache_clientes: dict | None = Non
         'status':          status,
         'ya_existe':               ya_existe,
         'comprobante_rechazado_id': comprobante_rechazado_id,
+        'comprobante_anulado_id':   comprobante_anulado_id,
     }
 
 
@@ -364,6 +377,16 @@ def _crear_comprobante(
             logger.info('[BULK] Eliminando comprobante RECHAZADO %s para re-emitir orden %s',
                         comp_ant.numero_completo, orden['numero_orden'])
             db.session.delete(comp_ant)
+            db.session.flush()
+
+    # Desvincular boleta ANULADA por NC (no eliminar — es registro tributario válido)
+    comp_anulado_id = orden.get('comprobante_anulado_id')
+    if comp_anulado_id:
+        comp_ant = db.session.get(Comprobante, comp_anulado_id)
+        if comp_ant:
+            logger.info('[BULK] Desvinculando boleta anulada %s para re-emitir orden %s',
+                        comp_ant.numero_completo, orden['numero_orden'])
+            comp_ant.numero_orden = None
             db.session.flush()
 
     tipo_doc_sunat = '01' if tipo_comprobante == 'FACTURA' else '03'

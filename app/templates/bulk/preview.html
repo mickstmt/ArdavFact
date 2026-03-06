@@ -136,7 +136,9 @@
         <a href="{{ url_for('ventas.lista_ventas') }}" class="btn btn-primary">
           <i class="bi bi-list-ul me-1"></i>Ver comprobantes
         </a>
-        <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Cerrar</button>
+        <a href="{{ url_for('bulk.upload') }}" class="btn btn-outline-secondary">
+          <i class="bi bi-upload me-1"></i>Cargar otro archivo
+        </a>
       </div>
     </div>
   </div>
@@ -283,22 +285,46 @@
 
     const toggleActivo  = document.getElementById('toggleFechaOverride').checked;
     const fechaOverride = toggleActivo ? (document.getElementById('fechaEmisionOverride').value || null) : null;
-    const fechaTexto = fechaOverride
-      ? `<div style="margin-top:0.4rem;"><strong>Fecha emisión:</strong> ${fechaOverride}</div>`
-      : `<div style="margin-top:0.4rem; color:#6c757d; font-size:0.85rem;"><i class="bi bi-info-circle"></i> Se usará la fecha de cada orden del Excel.</div>`;
 
-    const confirmado = await Swal.fire({
-      title: `¿Procesar ${seleccionados.length} orden(es)?`,
-      html: `<div style="text-align:left; font-size:0.9rem;">
-        <div>Se crearán comprobantes y se enviarán a SUNAT.</div>
-        ${fechaTexto}
-      </div>`,
-      icon: 'question',
-      showCancelButton: true,
-      confirmButtonText: 'Sí, procesar',
-      cancelButtonText: 'Cancelar',
-      confirmButtonColor: '#198754',
-    });
+    const confirmado = await Swal.fire(
+      fechaOverride
+        ? {
+            title: `¿Procesar ${seleccionados.length} orden(es)?`,
+            html: `<div style="text-align:left; font-size:0.9rem;">
+              <div>Se crearán comprobantes y se enviarán a SUNAT.</div>
+              <div style="margin-top:0.5rem;">
+                <i class="bi bi-calendar-check text-success"></i>
+                <strong> Fecha de emisión:</strong> ${fechaOverride}
+              </div>
+              <div style="margin-top:0.3rem; font-size:0.82rem; color:#6c757d;">
+                Esta fecha se aplicará a todos los comprobantes seleccionados.
+              </div>
+            </div>`,
+            icon: 'question',
+            confirmButtonText: 'Sí, procesar',
+            confirmButtonColor: '#198754',
+            showCancelButton: true,
+            cancelButtonText: 'Cancelar',
+          }
+        : {
+            title: '¿Procesar sin fecha personalizada?',
+            html: `<div style="text-align:left; font-size:0.9rem;">
+              <div>No has activado la fecha personalizada.</div>
+              <div style="margin-top:0.5rem;">
+                <i class="bi bi-calendar-x text-warning"></i>
+                <strong> Se usará la fecha de cada orden del Excel.</strong>
+              </div>
+              <div style="margin-top:0.3rem; font-size:0.82rem; color:#6c757d;">
+                Si deseas emitirlas con otra fecha, cancela y activa el toggle.
+              </div>
+            </div>`,
+            icon: 'warning',
+            confirmButtonText: 'Sí, usar fechas del Excel',
+            confirmButtonColor: '#fd7e14',
+            showCancelButton: true,
+            cancelButtonText: 'Cancelar',
+          }
+    );
     if (!confirmado.isConfirmed) return;
 
     const btnProcesar = document.getElementById('btnProcesar');
