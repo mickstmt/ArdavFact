@@ -27,12 +27,19 @@ def descargar_pdf(comp_id: int):
 
     fs = file_svc.get_file_service()
 
+    correlativo_8d = str(comp.correlativo).zfill(8)
+    nombre_base = f"{comp.serie}-{correlativo_8d}"
+    if comp.numero_orden:
+        filename = f"{comp.numero_orden}_{nombre_base}.pdf"
+    else:
+        filename = f"{nombre_base}.pdf"
+
     if fs.pdf_existe(comp):
         return send_file(
             comp.pdf_path,
             mimetype='application/pdf',
             as_attachment=False,
-            download_name=f'{comp.numero_completo}.pdf',
+            download_name=filename,
         )
 
     try:
@@ -47,7 +54,7 @@ def descargar_pdf(comp_id: int):
         io.BytesIO(pdf_bytes),
         mimetype='application/pdf',
         as_attachment=False,
-        download_name=f'{comp.numero_completo}.pdf',
+        download_name=filename,
     )
 
 
