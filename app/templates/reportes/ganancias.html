@@ -7,10 +7,16 @@
     <h4 class="mb-0 fw-semibold">Reporte de Ganancias</h4>
     <p class="text-muted mb-0 small">Desglose IGV · {{ resumen.total_comprobantes }} comprobante(s) en el período</p>
   </div>
-  <a href="{{ url_for('reportes.exportar_ganancias', fecha_ini=fecha_ini, fecha_fin=fecha_fin, tipo=tipo_filtro) }}"
-     class="btn btn-success btn-sm">
-    <i class="bi bi-file-earmark-excel-fill me-1"></i>Exportar Excel
-  </a>
+  <div class="d-flex gap-2">
+    <a href="{{ url_for('reportes.exportar_ganancias', fecha_ini=fecha_ini, fecha_fin=fecha_fin, tipo=tipo_filtro) }}"
+       class="btn btn-success btn-sm rounded-pill">
+      <i class="bi bi-file-earmark-excel-fill me-1"></i>Consolidado
+    </a>
+    <a href="{{ url_for('reportes.exportar_ganancias_detallado', fecha_ini=fecha_ini, fecha_fin=fecha_fin, tipo=tipo_filtro) }}"
+       class="btn btn-outline-success btn-sm rounded-pill">
+      <i class="bi bi-table me-1"></i>Detallado
+    </a>
+  </div>
 </div>
 
 <!-- Filtros -->

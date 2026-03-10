@@ -198,7 +198,178 @@ def exportar_ganancias():
     wb.save(output)
     output.seek(0)
 
-    nombre = f'ganancias_{fecha_ini.strftime("%Y%m%d")}_{fecha_fin.strftime("%Y%m%d")}.xlsx'
+    nombre = f'ganancias_consolidado_{fecha_ini.strftime("%Y%m%d")}_{fecha_fin.strftime("%Y%m%d")}.xlsx'
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=nombre,
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Exportación Excel — Detallado (por ítem)
+# ─────────────────────────────────────────────────────────────────────────────
+
+@reportes_bp.route('/ganancias/exportar-detallado')
+@login_required
+@requiere_permiso('reportes.exportar')
+def exportar_ganancias_detallado():
+    """Exporta reporte detallado a Excel (.xlsx) con una fila por ítem de comprobante."""
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+
+    fecha_ini   = _parse_date(request.args.get('fecha_ini', '')) or date.today().replace(day=1)
+    fecha_fin   = _parse_date(request.args.get('fecha_fin', '')) or date.today()
+    tipo_filtro = request.args.get('tipo', '')
+
+    query = (
+        Comprobante.query
+        .filter(
+            Comprobante.tipo_comprobante.in_(_TIPOS_VENTA),
+            Comprobante.estado.in_(_ESTADOS_VALIDOS),
+            func.date(Comprobante.fecha_emision) >= fecha_ini,
+            func.date(Comprobante.fecha_emision) <= fecha_fin,
+        )
+        .order_by(Comprobante.fecha_emision)
+    )
+    if tipo_filtro in _TIPOS_VENTA:
+        query = query.filter(Comprobante.tipo_comprobante == tipo_filtro)
+
+    mapa_costos = _build_mapa_costos()
+    comprobantes = query.all()
+
+    _COLOR_HDR = 'FF1e3a5f'
+    _COLOR_TOT = 'FFE8F4FD'
+    _COLOR_ALT = 'FFF7FAFD'
+    BORDER_SIDE = Side(style='thin', color='BDD7EE')
+    CELL_BORDER = Border(left=BORDER_SIDE, right=BORDER_SIDE,
+                         top=BORDER_SIDE, bottom=BORDER_SIDE)
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = 'Detallado'
+
+    hdrs = [
+        'N° Comprobante', 'Tipo', 'Fecha', 'Cliente',
+        'SKU', 'Producto', 'Cantidad', 'Precio Unit. (S/)',
+        'Ingreso Item (S/)', 'Costo Unit. USD', 'Costo Unit. (S/)',
+        'Costo Total (S/)', 'Ganancia (S/)', 'Margen %',
+    ]
+    ws.append(hdrs)
+    ws.row_dimensions[1].height = 26
+    for col_idx in range(1, len(hdrs) + 1):
+        cell = ws.cell(row=1, column=col_idx)
+        cell.font      = Font(bold=True, color='FFFFFFFF', size=11)
+        cell.fill      = PatternFill('solid', fgColor=_COLOR_HDR)
+        cell.alignment = Alignment(horizontal='center', vertical='center')
+        cell.border    = CELL_BORDER
+
+    fmt_soles = '"S/ "#,##0.00'
+    fmt_usd   = '"$"#,##0.0000'
+    fmt_pct   = '0.00"%"'
+
+    total_ingreso = total_costo = total_ganancia = 0.0
+    n_filas = 0
+
+    for comp in comprobantes:
+        fecha_str    = comp.fecha_emision.strftime('%d/%m/%Y') if comp.fecha_emision else ''
+        cliente_nom  = comp.cliente.nombre_completo if comp.cliente else '—'
+
+        for item in comp.items:
+            sku = (item.producto_sku or '').strip()
+            if not sku or sku == 'ENVIO':
+                continue
+
+            skus = extraer_skus_base(sku)
+            costo_unit_usd = sum(mapa_costos.get(s, 0.0) for s in skus)
+            costo_unit_pen = round(costo_unit_usd * _TIPO_CAMBIO, 2)
+            cantidad       = float(item.cantidad or 1)
+            costo_total    = round(costo_unit_pen * cantidad, 2)
+            ingreso_item   = float(item.subtotal_con_igv or 0)
+            ganancia       = round(ingreso_item - costo_total, 2)
+            margen         = round(ganancia / ingreso_item * 100, 2) if ingreso_item else 0.0
+
+            row_idx = ws.max_row + 1
+            ws.append([
+                comp.numero_completo,
+                comp.tipo_comprobante,
+                fecha_str,
+                cliente_nom,
+                sku,
+                item.producto_nombre,
+                cantidad,
+                float(item.precio_unitario_con_igv or 0),
+                ingreso_item,
+                round(costo_unit_usd, 4),
+                costo_unit_pen,
+                costo_total,
+                ganancia,
+                margen,
+            ])
+            ws.row_dimensions[row_idx].height = 17
+            is_alt = (n_filas % 2 == 0)
+            for col_idx, cell in enumerate(ws[row_idx], start=1):
+                cell.border = CELL_BORDER
+                if is_alt:
+                    cell.fill = PatternFill('solid', fgColor=_COLOR_ALT)
+                if col_idx in (1, 2, 3, 7):
+                    cell.alignment = Alignment(horizontal='center', vertical='center')
+                elif col_idx in (5, 6):
+                    cell.alignment = Alignment(horizontal='left', vertical='center')
+                elif col_idx == 8:
+                    cell.alignment     = Alignment(horizontal='right', vertical='center')
+                    cell.number_format = fmt_soles
+                elif col_idx == 9:
+                    cell.alignment     = Alignment(horizontal='right', vertical='center')
+                    cell.number_format = fmt_soles
+                elif col_idx == 10:
+                    cell.alignment     = Alignment(horizontal='right', vertical='center')
+                    cell.number_format = fmt_usd
+                elif col_idx in (11, 12, 13):
+                    cell.alignment     = Alignment(horizontal='right', vertical='center')
+                    cell.number_format = fmt_soles
+                elif col_idx == 14:
+                    cell.alignment     = Alignment(horizontal='right', vertical='center')
+                    cell.number_format = fmt_pct
+
+            total_ingreso  += ingreso_item
+            total_costo    += costo_total
+            total_ganancia += ganancia
+            n_filas += 1
+
+    # Fila de totales
+    total_row = ws.max_row + 1
+    ws.row_dimensions[total_row].height = 22
+    totales = ['TOTAL', '', f'{n_filas} ítems', '', '', '', '', '',
+               round(total_ingreso, 2), '', '', round(total_costo, 2),
+               round(total_ganancia, 2),
+               round(total_ganancia / total_ingreso * 100, 2) if total_ingreso else 0]
+    ws.append(totales)
+    for col_idx, cell in enumerate(ws[total_row], start=1):
+        cell.font   = Font(bold=True, size=11)
+        cell.fill   = PatternFill('solid', fgColor=_COLOR_TOT)
+        cell.border = CELL_BORDER
+        cell.alignment = Alignment(horizontal='center' if col_idx <= 3 else 'right',
+                                   vertical='center')
+        if col_idx in (9, 12, 13):
+            cell.number_format = fmt_soles
+        elif col_idx == 14:
+            cell.number_format = fmt_pct
+
+    # Anchos de columna
+    col_widths = [18, 10, 12, 24, 16, 34, 10, 16, 16, 14, 14, 14, 14, 12]
+    for i, w in enumerate(col_widths, start=1):
+        ws.column_dimensions[get_column_letter(i)].width = w
+
+    ws.freeze_panes = 'A2'
+
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    nombre = f'ganancias_detallado_{fecha_ini.strftime("%Y%m%d")}_{fecha_fin.strftime("%Y%m%d")}.xlsx'
     return send_file(
         output,
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
