@@ -33,8 +33,33 @@
   .check-all-wrap { display: flex; align-items: center; gap: 0.5rem; }
   .bulk-bar { display: none; background: var(--af-primary); color: #fff; border-radius: var(--af-radius); padding: 0.5rem 1rem; font-size: 0.82rem; align-items: center; gap: 0.75rem; margin-bottom: 0.75rem; }
   .bulk-bar.show { display: flex; }
+  .sort-link { text-decoration: none; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.03em; display: inline-flex; align-items: center; gap: 2px; transition: color 0.15s; white-space: nowrap; }
+  .sort-link:hover { color: var(--af-primary) !important; }
+  .sort-link i { font-size: 0.65rem; }
+  .sort-link.active { color: var(--af-primary); font-weight: 600; }
 </style>
 {% endblock %}
+
+{% macro sort_th(label, col, extra_class='') %}
+{% if sort == col and sort_dir == 'desc' %}
+  {% set next_href = url_for('ventas.lista_ventas', sort=col, dir='asc', page=1, tipo=filtros.tipo, estado=filtros.estado, q=filtros.q, fecha_ini=filtros.fecha_ini, fecha_fin=filtros.fecha_fin) %}
+  {% set is_active = true %}
+  {% set icon_class = 'bi-arrow-down' %}
+{% elif sort == col and sort_dir == 'asc' %}
+  {% set next_href = url_for('ventas.lista_ventas', page=1, tipo=filtros.tipo, estado=filtros.estado, q=filtros.q, fecha_ini=filtros.fecha_ini, fecha_fin=filtros.fecha_fin) %}
+  {% set is_active = true %}
+  {% set icon_class = 'bi-arrow-up' %}
+{% else %}
+  {% set next_href = url_for('ventas.lista_ventas', sort=col, dir='desc', page=1, tipo=filtros.tipo, estado=filtros.estado, q=filtros.q, fecha_ini=filtros.fecha_ini, fecha_fin=filtros.fecha_fin) %}
+  {% set is_active = false %}
+  {% set icon_class = 'bi-arrow-down-up' %}
+{% endif %}
+<th class="{{ extra_class }}">
+  <a href="{{ next_href }}" class="sort-link {{ 'active' if is_active else 'text-muted' }}">
+    {{ label }}<i class="bi {{ icon_class }} ms-1 {{ '' if is_active else 'opacity-25' }}"></i>
+  </a>
+</th>
+{% endmacro %}
 
 {% block content %}
 <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
@@ -104,6 +129,9 @@
         <li><button class="dropdown-item" onclick="descargarLote('cdr')"><i class="bi bi-file-check me-2 text-success"></i>CDRs (ZIP)</button></li>
       </ul>
     </div>
+    <button class="btn btn-sm btn-warning fw-semibold" onclick="abrirModalNCLote()">
+      <i class="bi bi-file-earmark-minus me-1"></i>Emitir NCs
+    </button>
     <button class="btn btn-sm btn-light" onclick="enviarLote()">
       <i class="bi bi-send me-1"></i>Enviar a SUNAT
     </button>
@@ -119,16 +147,16 @@
         <th style="width:36px;">
           <input type="checkbox" id="check-all" title="Seleccionar todos">
         </th>
-        <th>N° Orden</th>
+        {{ sort_th('N° Orden', 'orden') }}
         <th>Tipo</th>
-        <th>Comprobante</th>
-        <th style="white-space:nowrap;">F. Pedido</th>
-        <th style="white-space:nowrap;">F. Emisión</th>
-        <th>Cliente</th>
+        {{ sort_th('Comprobante', 'comprobante') }}
+        {{ sort_th('F. Pedido', 'fecha_pedido', 'text-nowrap') }}
+        {{ sort_th('F. Emisión', 'fecha', 'text-nowrap') }}
+        {{ sort_th('Cliente', 'cliente') }}
         <th>Documento</th>
-        <th class="text-end">Total</th>
+        {{ sort_th('Total', 'total', 'text-end') }}
         <th class="text-end">IGV</th>
-        <th>Estado</th>
+        {{ sort_th('Estado', 'estado') }}
         <th>Acciones</th>
       </tr>
     </thead>
@@ -209,21 +237,21 @@
     <nav>
       <ul class="pagination pagination-sm mb-0">
         <li class="page-item {% if not comprobantes.has_prev %}disabled{% endif %}">
-          <a class="page-link" href="{{ url_for('ventas.lista_ventas', page=comprobantes.prev_num, **filtros) }}">
+          <a class="page-link" href="{{ url_for('ventas.lista_ventas', page=comprobantes.prev_num, sort=sort, dir=sort_dir, **filtros) }}">
             <i class="bi bi-chevron-left"></i>
           </a>
         </li>
         {% for p in comprobantes.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
           {% if p %}
             <li class="page-item {% if p == comprobantes.page %}active{% endif %}">
-              <a class="page-link" href="{{ url_for('ventas.lista_ventas', page=p, **filtros) }}">{{ p }}</a>
+              <a class="page-link" href="{{ url_for('ventas.lista_ventas', page=p, sort=sort, dir=sort_dir, **filtros) }}">{{ p }}</a>
             </li>
           {% else %}
             <li class="page-item disabled"><span class="page-link">…</span></li>
           {% endif %}
         {% endfor %}
         <li class="page-item {% if not comprobantes.has_next %}disabled{% endif %}">
-          <a class="page-link" href="{{ url_for('ventas.lista_ventas', page=comprobantes.next_num, **filtros) }}">
+          <a class="page-link" href="{{ url_for('ventas.lista_ventas', page=comprobantes.next_num, sort=sort, dir=sort_dir, **filtros) }}">
             <i class="bi bi-chevron-right"></i>
           </a>
         </li>
@@ -330,5 +358,211 @@ async function enviarLote() {
     setTimeout(() => location.reload(), 1500);
   } catch(e) { showToast('Error', e.message, 'danger'); }
 }
+
+// ── NC en lote ──
+function abrirModalNCLote() {
+  const ids = [...document.querySelectorAll('.row-check:checked')].map(c => c.value);
+  if (!ids.length) return;
+  document.getElementById('nc-lote-count').textContent = ids.length;
+  document.getElementById('nc-lote-motivo').value = '';
+  new bootstrap.Modal(document.getElementById('modalNCMotivo')).show();
+}
+
+async function confirmarNCLote() {
+  const motivo = document.getElementById('nc-lote-motivo');
+  if (!motivo.value) { motivo.focus(); motivo.reportValidity(); return; }
+
+  const ids          = [...document.querySelectorAll('.row-check:checked')].map(c => c.value);
+  const motivoTexto  = motivo.options[motivo.selectedIndex].text;
+
+  const conf = await Swal.fire({
+    title: '¿Confirmar emisión masiva?',
+    html: `Se emitirán NCs para <strong>${ids.length}</strong> comprobante(s).<br>
+           <small class="text-muted">Motivo: ${motivoTexto}</small><br><br>
+           <span class="text-warning fw-semibold"><i class="bi bi-exclamation-triangle me-1"></i>
+           Solo se procesarán Facturas/Boletas con estado <strong>Enviado/Aceptado</strong> y sin NC previa.
+           Esta acción no se puede deshacer.</span>`,
+    icon: 'warning', showCancelButton: true,
+    confirmButtonColor: '#ffc107', cancelButtonColor: '#6c757d',
+    confirmButtonText: '<i class="bi bi-file-earmark-minus me-1"></i> Sí, emitir NCs',
+    cancelButtonText: 'Cancelar',
+    background: 'var(--af-surface)', color: 'var(--af-text)',
+  });
+  if (!conf.isConfirmed) return;
+
+  bootstrap.Modal.getInstance(document.getElementById('modalNCMotivo')).hide();
+  document.getElementById('btn-confirmar-nc-lote').disabled = true;
+
+  // Reset modal de progreso
+  const el = id => document.getElementById(id);
+  el('nc-prog-spinner').classList.remove('d-none');
+  el('nc-prog-ok-icon').classList.add('d-none');
+  el('nc-prog-title').textContent = 'Emitiendo Notas de Crédito...';
+  el('nc-prog-msg').textContent   = 'Enviando a SUNAT, por favor espere.';
+  el('nc-prog-bar').style.width   = '0%';
+  el('nc-prog-bar').className     = 'progress-bar progress-bar-striped progress-bar-animated bg-warning';
+  el('nc-prog-pct').textContent   = '0%';
+  el('nc-prog-text').textContent  = 'Iniciando...';
+  el('nc-prog-stat-ok').textContent  = '0';
+  el('nc-prog-stat-err').textContent = '0';
+  el('nc-prog-container').classList.remove('d-none');
+  el('nc-prog-btn-finish').classList.add('d-none');
+  el('nc-prog-errores').innerHTML = '';
+  el('nc-prog-errores').classList.add('d-none');
+
+  const progressModal = new bootstrap.Modal(document.getElementById('modalNCProgress'));
+  progressModal.show();
+
+  let creadas = 0;
+  const errores = [];
+  const total   = ids.length;
+
+  for (let i = 0; i < total; i++) {
+    const pct = Math.round(((i + 1) / total) * 100);
+    el('nc-prog-text').textContent = `Procesando ${i + 1} de ${total}...`;
+    try {
+      const res  = await fetch('/notas/nc/lote', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
+        body: JSON.stringify({ ids: [ids[i]], motivo_codigo: motivo.value }),
+      });
+      const data = await res.json();
+      if (data.success && data.creadas > 0) {
+        creadas++;
+      } else {
+        (data.errores || [{ numero: ids[i], error: data.message || 'Error desconocido' }])
+          .forEach(e => errores.push(e));
+      }
+    } catch (e) {
+      errores.push({ numero: ids[i], error: 'Error de red' });
+    }
+    el('nc-prog-bar').style.width      = `${pct}%`;
+    el('nc-prog-pct').textContent      = `${pct}%`;
+    el('nc-prog-stat-ok').textContent  = creadas;
+    el('nc-prog-stat-err').textContent = errores.length;
+  }
+
+  // Estado final
+  el('nc-prog-container').classList.add('d-none');
+  el('nc-prog-spinner').classList.add('d-none');
+  el('nc-prog-ok-icon').classList.remove('d-none');
+  el('nc-prog-title').textContent = '¡Proceso Completado!';
+  el('nc-prog-msg').textContent   = `${creadas} NC(s) emitida(s) exitosamente.`;
+  el('nc-prog-bar').classList.remove('progress-bar-animated', 'progress-bar-striped', 'bg-warning');
+  el('nc-prog-bar').classList.add(errores.length === 0 ? 'bg-success' : 'bg-warning');
+  el('nc-prog-btn-finish').classList.remove('d-none');
+  el('btn-confirmar-nc-lote').disabled = false;
+
+  if (errores.length > 0) {
+    const ul = errores.map(e => `<li><strong>${e.numero}</strong>: ${e.error}</li>`).join('');
+    el('nc-prog-errores').innerHTML =
+      `<details class="mt-3"><summary class="small text-muted" style="cursor:pointer">
+       ${errores.length} omitida(s) — ver detalle</summary>
+       <ul class="text-start small mt-2 mb-0">${ul}</ul></details>`;
+    el('nc-prog-errores').classList.remove('d-none');
+  }
+}
 </script>
+{% endblock %}
+
+{% block modals %}
+{# ── Modal: Motivo NC en lote ── #}
+<div class="modal fade" id="modalNCMotivo" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow" style="background:var(--af-surface); border-radius:var(--af-radius);">
+      <div class="modal-header border-0 pb-0">
+        <h5 class="modal-title fw-bold" style="color:var(--af-text);">
+          <i class="bi bi-file-earmark-minus text-warning me-2"></i>Emitir NCs en lote
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body pt-3">
+        <div class="alert alert-warning d-flex gap-2 align-items-start py-2" style="font-size:0.82rem;">
+          <i class="bi bi-exclamation-triangle-fill flex-shrink-0 mt-1"></i>
+          <div>
+            Se procesarán <strong id="nc-lote-count">0</strong> comprobante(s) seleccionado(s).
+            Solo se emitirán NCs para Facturas/Boletas con estado <strong>Enviado/Aceptado</strong> y sin NC previa.
+          </div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold" style="font-size:0.82rem; color:var(--af-text);">
+            Motivo <span class="text-danger">*</span>
+            <small class="text-muted fw-normal">(SUNAT Catálogo 09)</small>
+          </label>
+          <select id="nc-lote-motivo" class="form-select form-select-sm" required
+            style="background:var(--af-surface-2); border-color:var(--af-border); color:var(--af-text);">
+            <option value="" disabled selected>— Seleccione el motivo —</option>
+            <option value="01">01 — ANULACION DE LA OPERACION</option>
+            <option value="02">02 — ANULACION POR ERROR EN EL RUC</option>
+            <option value="03">03 — CORRECCION POR ERROR EN LA DESCRIPCION</option>
+            <option value="04">04 — DESCUENTO GLOBAL</option>
+            <option value="05">05 — DESCUENTO POR ITEM</option>
+            <option value="06">06 — DEVOLUCION TOTAL</option>
+            <option value="07">07 — DEVOLUCION POR ITEM</option>
+            <option value="08">08 — BONIFICACION</option>
+            <option value="09">09 — DISMINUCION EN EL VALOR</option>
+            <option value="10">10 — OTROS CONCEPTOS</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer border-0 pt-0 gap-2">
+        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-warning btn-sm fw-semibold" id="btn-confirmar-nc-lote" onclick="confirmarNCLote()">
+          <i class="bi bi-file-earmark-minus me-1"></i>Continuar
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# ── Modal: Progreso NC en lote ── #}
+<div class="modal fade" id="modalNCProgress" data-bs-backdrop="static" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow" style="background:var(--af-surface); border-radius:var(--af-radius);">
+      <div class="modal-body text-center p-5">
+        <div id="nc-prog-spinner" class="mb-4">
+          <div class="spinner-border text-warning" style="width:3rem; height:3rem;"></div>
+        </div>
+        <div id="nc-prog-ok-icon" class="mb-4 d-none">
+          <div class="bg-success bg-opacity-10 text-success rounded-circle d-inline-flex align-items-center justify-content-center"
+               style="width:80px; height:80px;">
+            <i class="bi bi-check-lg fs-1"></i>
+          </div>
+        </div>
+        <h5 class="fw-bold" id="nc-prog-title" style="color:var(--af-text);">Emitiendo Notas de Crédito...</h5>
+        <p class="text-muted mb-4" id="nc-prog-msg">Enviando a SUNAT, por favor espere.</p>
+
+        <div id="nc-prog-container" class="mb-4">
+          <div class="progress rounded-pill" style="height:12px;">
+            <div id="nc-prog-bar" class="progress-bar progress-bar-striped progress-bar-animated bg-warning"
+                 role="progressbar" style="width:0%"></div>
+          </div>
+          <div class="d-flex justify-content-between mt-2 small fw-bold">
+            <span id="nc-prog-text" class="text-warning">Iniciando...</span>
+            <span id="nc-prog-pct" style="color:var(--af-text-muted);">0%</span>
+          </div>
+        </div>
+
+        <div class="row mt-3">
+          <div class="col-6">
+            <div class="h3 fw-bold text-success mb-0" id="nc-prog-stat-ok">0</div>
+            <div class="small text-muted text-uppercase fw-bold">Emitidas</div>
+          </div>
+          <div class="col-6">
+            <div class="h3 fw-bold text-danger mb-0" id="nc-prog-stat-err">0</div>
+            <div class="small text-muted text-uppercase fw-bold">Omitidas</div>
+          </div>
+        </div>
+
+        <div id="nc-prog-errores" class="d-none"></div>
+
+        <div class="mt-4 d-none" id="nc-prog-btn-finish">
+          <button class="btn btn-primary w-100 fw-bold" onclick="location.reload()">
+            <i class="bi bi-list-check me-2"></i>Ver lista de comprobantes
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}

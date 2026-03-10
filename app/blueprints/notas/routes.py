@@ -13,6 +13,117 @@ from . import notas_bp
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# NC en Lote
+# ─────────────────────────────────────────────────────────────────────────────
+
+@notas_bp.route('/nc/lote', methods=['POST'])
+@login_required
+@requiere_permiso('ventas.crear')
+def nc_lote():
+    """Emite una Nota de Crédito para un comprobante (llamado uno a uno desde el frontend)."""
+    payload       = request.get_json(force=True) or {}
+    ids           = [int(i) for i in payload.get('ids', []) if str(i).isdigit()]
+    motivo_codigo = payload.get('motivo_codigo', '').strip()
+
+    if not motivo_codigo or motivo_codigo not in MOTIVOS_NC:
+        return jsonify({'success': False, 'message': 'Motivo inválido.'}), 400
+    if not ids:
+        return jsonify({'success': False, 'message': 'Sin comprobantes.'}), 400
+
+    cfg     = current_app.config
+    creadas = 0
+    errores = []
+
+    for comp_id in ids:
+        try:
+            comp_ref = db.session.get(Comprobante, comp_id)
+            if not comp_ref:
+                errores.append({'numero': str(comp_id), 'error': 'No encontrado'}); continue
+            if comp_ref.tipo_comprobante not in ('FACTURA', 'BOLETA'):
+                errores.append({'numero': comp_ref.numero_completo, 'error': 'No es Factura/Boleta'}); continue
+            if comp_ref.estado not in ('ENVIADO', 'ACEPTADO'):
+                errores.append({'numero': comp_ref.numero_completo, 'error': f'Estado: {comp_ref.estado}'}); continue
+            if comp_ref.notas_credito:
+                errores.append({'numero': comp_ref.numero_completo, 'error': 'Ya tiene NC'}); continue
+
+            serie = cfg.get('SERIE_NC_FACTURA', 'FC01') if comp_ref.tipo_comprobante == 'FACTURA' \
+                    else cfg.get('SERIE_NC_BOLETA', 'BC01')
+            correlativo  = _siguiente_correlativo(serie)
+            motivo_texto = MOTIVOS_NC[motivo_codigo]
+
+            costo_envio_ref = Decimal(str(comp_ref.costo_envio or '0'))
+            descuento_ref   = Decimal(str(comp_ref.descuento or '0'))
+            nc = Comprobante(
+                tipo_comprobante='NOTA_CREDITO',
+                tipo_documento_sunat='07',
+                serie=serie,
+                correlativo=str(correlativo),
+                numero_completo=f'{serie}-{str(correlativo).zfill(8)}',
+                cliente_id=comp_ref.cliente_id,
+                vendedor_id=current_user.id,
+                numero_orden=comp_ref.numero_orden,
+                costo_envio=costo_envio_ref,
+                descuento=descuento_ref,
+                estado='PENDIENTE',
+                fecha_emision=datetime.utcnow(),
+                comprobante_referencia_id=comp_ref.id,
+                motivo_codigo=motivo_codigo,
+                motivo_descripcion=motivo_texto,
+            )
+            db.session.add(nc)
+            db.session.flush()
+
+            items_obj = []
+            for it in comp_ref.items:
+                item = ComprobanteItem(
+                    comprobante_id=nc.id,
+                    producto_nombre=it.producto_nombre,
+                    producto_sku=it.producto_sku,
+                    cantidad=it.cantidad,
+                    unidad_medida=it.unidad_medida,
+                    precio_unitario_con_igv=it.precio_unitario_con_igv,
+                    precio_unitario_sin_igv=it.precio_unitario_sin_igv,
+                    igv_unitario=it.igv_unitario,
+                    subtotal_sin_igv=it.subtotal_sin_igv,
+                    igv_total=it.igv_total,
+                    subtotal_con_igv=it.subtotal_con_igv,
+                    tipo_afectacion_igv=it.tipo_afectacion_igv,
+                    variacion_id=it.variacion_id,
+                    atributos_json=it.atributos_json,
+                )
+                db.session.add(item)
+                items_obj.append(item)
+            db.session.flush()
+
+            totales = calcular_totales_comprobante(items_obj, costo_envio_ref, descuento_ref)
+            nc.subtotal                     = sum(i.subtotal_con_igv for i in items_obj)
+            nc.total_operaciones_gravadas   = totales['total_gravadas']
+            nc.total_operaciones_exoneradas = totales['total_exoneradas']
+            nc.total_operaciones_inafectas  = totales['total_inafectas']
+            nc.total_igv                    = totales['total_igv']
+            nc.total                        = totales['total']
+            db.session.commit()
+
+            resultado = mipse_service.procesar_comprobante(nc)
+            if resultado['success']:
+                file_svc.get_file_service().guardar_archivos(nc, resultado)
+            db.session.commit()
+            creadas += 1
+
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f'[NC-LOTE] Error en {comp_id}: {e}', exc_info=True)
+            errores.append({'numero': str(comp_id), 'error': str(e)})
+
+    return jsonify({
+        'success': True,
+        'creadas': creadas,
+        'errores': errores,
+        'message': f'{creadas} NC(s) emitida(s), {len(errores)} omitida(s).',
+    })
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Nota de Crédito
 # ─────────────────────────────────────────────────────────────────────────────
 

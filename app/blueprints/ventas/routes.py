@@ -4,8 +4,10 @@ from datetime import datetime, date
 from decimal import Decimal
 from flask import render_template, request, jsonify, current_app, abort
 from flask_login import login_required, current_user
+from sqlalchemy import func
 from app.extensions import db
 from app.models.comprobante import Comprobante, ComprobanteItem
+from app.models.cliente import Cliente
 from app.services.cliente_service import (
     buscar_cliente_local,
     guardar_cliente_desde_dict,
@@ -206,18 +208,37 @@ def crear_venta():
 @login_required
 @requiere_permiso('ventas.ver')
 def lista_ventas():
-    """Listado con filtros, búsqueda y paginación."""
+    """Listado con filtros, búsqueda, ordenamiento y paginación."""
     page      = request.args.get('page', 1, type=int)
     tipo      = request.args.get('tipo', '').strip()
     estado    = request.args.get('estado', '').strip()
-    q         = request.args.get('q', '').strip()       # número de comprobante, cliente o nro orden
+    q         = request.args.get('q', '').strip()
     fecha_ini = request.args.get('fecha_ini', '').strip()
     fecha_fin = request.args.get('fecha_fin', '').strip()
+    sort      = request.args.get('sort', '').strip()
+    sort_dir  = request.args.get('dir', 'desc').strip()
+
+    sort_map = {
+        'orden':        Comprobante.numero_orden,
+        'comprobante':  Comprobante.numero_completo,
+        'fecha_pedido': func.coalesce(Comprobante.fecha_pedido, Comprobante.fecha_emision),
+        'fecha':        Comprobante.fecha_emision,
+        'cliente':      Cliente.razon_social,
+        'total':        Comprobante.total,
+        'estado':       Comprobante.estado,
+    }
+
+    if sort and sort in sort_map:
+        col = sort_map[sort]
+        order_col = col.desc() if sort_dir == 'desc' else col.asc()
+    else:
+        sort = ''
+        order_col = Comprobante.fecha_emision.desc()
 
     query = (
         Comprobante.query
         .join(Comprobante.cliente)
-        .order_by(Comprobante.fecha_emision.desc())
+        .order_by(order_col)
     )
 
     if tipo:
@@ -225,7 +246,6 @@ def lista_ventas():
     if estado:
         query = query.filter(Comprobante.estado == estado)
     if q:
-        from app.models.cliente import Cliente
         t = f'%{q}%'
         query = query.filter(
             db.or_(
@@ -253,11 +273,14 @@ def lista_ventas():
             pass
 
     comprobantes = query.paginate(page=page, per_page=25, error_out=False)
+    filtros = {'tipo': tipo, 'estado': estado, 'q': q,
+               'fecha_ini': fecha_ini, 'fecha_fin': fecha_fin}
 
     return render_template('ventas/lista.html',
         comprobantes=comprobantes,
-        filtros={'tipo': tipo, 'estado': estado, 'q': q,
-                 'fecha_ini': fecha_ini, 'fecha_fin': fecha_fin},
+        filtros=filtros,
+        sort=sort,
+        sort_dir=sort_dir,
     )
 
 
