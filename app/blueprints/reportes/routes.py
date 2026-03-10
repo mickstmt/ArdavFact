@@ -224,10 +224,11 @@ def exportar_ganancias_detallado():
     fecha_fin   = _parse_date(request.args.get('fecha_fin', '')) or date.today()
     tipo_filtro = request.args.get('tipo', '')
 
+    _TIPOS_DETALLADO = _TIPOS_VENTA + ('NOTA_CREDITO',)
     query = (
         Comprobante.query
         .filter(
-            Comprobante.tipo_comprobante.in_(_TIPOS_VENTA),
+            Comprobante.tipo_comprobante.in_(_TIPOS_DETALLADO),
             Comprobante.estado.in_(_ESTADOS_VALIDOS),
             func.date(Comprobante.fecha_emision) >= fecha_ini,
             func.date(Comprobante.fecha_emision) <= fecha_fin,
@@ -277,19 +278,26 @@ def exportar_ganancias_detallado():
         fecha_str    = comp.fecha_emision.strftime('%d/%m/%Y') if comp.fecha_emision else ''
         cliente_nom  = comp.cliente.nombre_completo if comp.cliente else '—'
 
+        es_nc = comp.tipo_comprobante == 'NOTA_CREDITO'
         for item in comp.items:
             sku = (item.producto_sku or '').strip()
             if not sku or sku == 'ENVIO':
                 continue
 
-            skus = extraer_skus_base(sku)
-            costo_unit_usd = sum(mapa_costos.get(s, 0.0) for s in skus)
-            costo_unit_pen = round(costo_unit_usd * _TIPO_CAMBIO, 2)
-            cantidad       = float(item.cantidad or 1)
-            costo_total    = round(costo_unit_pen * cantidad, 2)
-            ingreso_item   = float(item.subtotal_con_igv or 0)
-            ganancia       = round(ingreso_item - costo_total, 2)
-            margen         = round(ganancia / ingreso_item * 100, 2) if ingreso_item else 0.0
+            cantidad = float(item.cantidad or 1)
+            if es_nc:
+                ingreso_item   = -float(item.subtotal_con_igv or 0)
+                costo_unit_usd = 0.0
+                costo_unit_pen = 0.0
+                costo_total    = 0.0
+            else:
+                skus = extraer_skus_base(sku)
+                costo_unit_usd = sum(mapa_costos.get(s, 0.0) for s in skus)
+                costo_unit_pen = round(costo_unit_usd * _TIPO_CAMBIO, 2)
+                costo_total    = round(costo_unit_pen * cantidad, 2)
+                ingreso_item   = float(item.subtotal_con_igv or 0)
+            ganancia = round(ingreso_item - costo_total, 2)
+            margen   = round(ganancia / ingreso_item * 100, 2) if ingreso_item else 0.0
 
             row_idx = ws.max_row + 1
             ws.append([
