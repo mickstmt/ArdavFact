@@ -156,6 +156,29 @@ def reset_password(user_id: int):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Scheduler
+# ─────────────────────────────────────────────────────────────────────────────
+
+@admin_bp.route('/scheduler/estado')
+@login_required
+@requiere_permiso('usuarios.gestionar')
+def scheduler_estado():
+    """Devuelve el estado del scheduler como JSON."""
+    from app.services.scheduler_service import get_status
+    return jsonify(get_status())
+
+
+@admin_bp.route('/scheduler/ejecutar-ahora', methods=['POST'])
+@login_required
+@requiere_permiso('usuarios.gestionar')
+def scheduler_ejecutar_ahora():
+    """Dispara el envío de pendientes inmediatamente."""
+    from app.services.scheduler_service import ejecutar_ahora
+    ejecutar_ahora(current_app._get_current_object())
+    return jsonify({'success': True, 'message': 'Tarea iniciada en segundo plano.'})
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Helper
 # ─────────────────────────────────────────────────────────────────────────────
 

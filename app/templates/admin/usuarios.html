@@ -89,6 +89,19 @@
 </div>
 
 
+<!-- Widget: Scheduler -->
+<div class="af-card mt-4 p-3">
+  <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <div>
+      <h6 class="fw-semibold mb-0"><i class="bi bi-clock-history me-2 text-primary"></i>Scheduler — Envío automático</h6>
+      <p class="text-muted small mb-0" id="sched-info">Cargando estado...</p>
+    </div>
+    <button class="btn btn-sm btn-outline-primary" id="btn-ejecutar-ahora" onclick="ejecutarAhora()">
+      <i class="bi bi-play-circle me-1"></i>Ejecutar ahora
+    </button>
+  </div>
+</div>
+
 <!-- Modal: Nuevo usuario -->
 <div class="modal fade" id="modalNuevoUsuario" tabindex="-1">
   <div class="modal-dialog">
@@ -243,5 +256,39 @@ async function resetPassword(userId, nombre) {
     showToast('error', data.message);
   }
 }
+
+// ── Scheduler ────────────────────────────────────────────────────────────────
+async function cargarEstadoScheduler() {
+  try {
+    const r = await fetch('{{ url_for("admin.scheduler_estado") }}');
+    const d = await r.json();
+    const info = document.getElementById('sched-info');
+    if (d.activo) {
+      info.textContent = `Activo · próxima ejecución: ${d.proxima_ejecucion || '—'} (${d.zona_horaria})`;
+    } else {
+      info.textContent = 'Inactivo';
+    }
+  } catch {
+    document.getElementById('sched-info').textContent = 'No disponible';
+  }
+}
+
+async function ejecutarAhora() {
+  const btn = document.getElementById('btn-ejecutar-ahora');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Ejecutando...';
+  try {
+    const r = await fetch('{{ url_for("admin.scheduler_ejecutar_ahora") }}', {method: 'POST'});
+    const d = await r.json();
+    showToast(d.success ? 'success' : 'error', d.message);
+  } catch {
+    showToast('error', 'Error de conexión.');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-play-circle me-1"></i>Ejecutar ahora';
+  }
+}
+
+document.addEventListener('DOMContentLoaded', cargarEstadoScheduler);
 </script>
 {% endblock %}

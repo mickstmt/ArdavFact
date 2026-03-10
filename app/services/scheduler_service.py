@@ -118,5 +118,29 @@ def _enviar_pendientes() -> None:
     )
 
 
+def get_status() -> dict:
+    """Devuelve el estado del scheduler para la UI de admin."""
+    if _scheduler is None or not _scheduler.running:
+        return {'activo': False, 'proxima_ejecucion': None, 'zona_horaria': 'America/Lima'}
+
+    job = _scheduler.get_job('enviar_pendientes')
+    proxima = None
+    if job and job.next_run_time:
+        proxima = job.next_run_time.strftime('%d/%m/%Y %H:%M')
+
+    return {
+        'activo':            True,
+        'proxima_ejecucion': proxima,
+        'zona_horaria':      'America/Lima',
+    }
+
+
+def ejecutar_ahora(app) -> None:
+    """Dispara el job de envío de pendientes inmediatamente (background)."""
+    import threading
+    t = threading.Thread(target=_job_enviar_pendientes, args=(app,), daemon=True)
+    t.start()
+
+
 def _ts() -> str:
     return datetime.now(tz=timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')
