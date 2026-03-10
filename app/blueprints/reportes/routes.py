@@ -11,7 +11,20 @@ from app.extensions import db
 from app.models.comprobante import Comprobante
 from app.models.producto import CostoProducto
 from app.decorators import requiere_permiso
+from app.services.utils import extraer_skus_base
 from . import reportes_bp
+
+_TIPO_CAMBIO = 3.75  # USD → PEN
+
+
+def _build_mapa_costos() -> dict:
+    """Carga todos los costos en memoria: {sku_str: costo_usd}."""
+    mapa = {}
+    for c in CostoProducto.query.all():
+        sku_str = str(c.sku).split('.')[0].strip()
+        if sku_str:
+            mapa[sku_str] = float(c.costo)
+    return mapa
 
 _TIPOS_VENTA   = ('FACTURA', 'BOLETA')
 _ESTADOS_VALIDOS = ('ENVIADO', 'ACEPTADO')
@@ -52,12 +65,13 @@ def ganancias():
     if tipo_filtro in _TIPOS_VENTA:
         query = query.filter(Comprobante.tipo_comprobante == tipo_filtro)
 
+    mapa_costos = _build_mapa_costos()
     todos     = query.all()
-    resumen   = _calcular_resumen(todos)
+    resumen   = _calcular_resumen(todos, mapa_costos)
     paginated = query.order_by(Comprobante.fecha_emision.desc()).paginate(
         page=page, per_page=30, error_out=False
     )
-    filas = [_enriquecer_fila(c) for c in paginated.items]
+    filas = [_enriquecer_fila(c, mapa_costos) for c in paginated.items]
 
     return render_template(
         'reportes/ganancias.html',
@@ -100,9 +114,10 @@ def exportar_ganancias():
     if tipo_filtro in _TIPOS_VENTA:
         query = query.filter(Comprobante.tipo_comprobante == tipo_filtro)
 
+    mapa_costos = _build_mapa_costos()
     todos   = query.all()
-    resumen = _calcular_resumen(todos)
-    filas   = [_enriquecer_fila(c) for c in todos]
+    resumen = _calcular_resumen(todos, mapa_costos)
+    filas   = [_enriquecer_fila(c, mapa_costos) for c in todos]
 
     wb = openpyxl.Workbook()
 
@@ -196,7 +211,7 @@ def exportar_ganancias():
 # Helpers
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _calcular_resumen(comprobantes: list) -> dict:
+def _calcular_resumen(comprobantes: list, mapa_costos: dict) -> dict:
     total_ingresos  = Decimal('0')
     total_igv       = Decimal('0')
     base_imponible  = Decimal('0')
@@ -208,7 +223,7 @@ def _calcular_resumen(comprobantes: list) -> dict:
         total_igv       += c.total_igv or Decimal('0')
         base_imponible  += c.total_operaciones_gravadas or Decimal('0')
         gasto_envio     += c.costo_envio or Decimal('0')
-        costo_productos += _costo_comprobante(c)
+        costo_productos += _costo_comprobante(c, mapa_costos)
 
     ganancia_bruta = total_ingresos - costo_productos - gasto_envio
 
@@ -227,21 +242,21 @@ def _calcular_resumen(comprobantes: list) -> dict:
     }
 
 
-def _costo_comprobante(comp: Comprobante) -> Decimal:
+def _costo_comprobante(comp: Comprobante, mapa_costos: dict) -> Decimal:
     total = Decimal('0')
     for item in comp.items:
-        if not item.producto_sku:
+        sku = (item.producto_sku or '').strip()
+        if not sku or sku == 'ENVIO':
             continue
-        cp = CostoProducto.query.filter(
-            CostoProducto.sku.ilike(item.producto_sku.strip())
-        ).first()
-        if cp and cp.costo:
-            total += cp.costo * (item.cantidad or Decimal('1'))
+        skus = extraer_skus_base(sku)
+        costo_unit_usd = sum(mapa_costos.get(s, 0.0) for s in skus)
+        costo_unit_pen = Decimal(str(round(costo_unit_usd * _TIPO_CAMBIO, 4)))
+        total += costo_unit_pen * (item.cantidad or Decimal('1'))
     return total
 
 
-def _enriquecer_fila(comp: Comprobante) -> dict:
-    costo_prods   = _costo_comprobante(comp)
+def _enriquecer_fila(comp: Comprobante, mapa_costos: dict) -> dict:
+    costo_prods   = _costo_comprobante(comp, mapa_costos)
     total         = comp.total or Decimal('0')
     costo_envio   = comp.costo_envio or Decimal('0')
     ganancia      = total - costo_prods - costo_envio

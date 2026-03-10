@@ -165,3 +165,17 @@ def number_to_words_es(amount: Decimal) -> str:
         texto = ' '.join(p for p in partes if p)
 
     return f"{texto} CON {centavos:02d}/100 SOLES"
+
+
+def extraer_skus_base(sku_woo: str) -> list:
+    """Extrae segmentos numéricos de 7 u 8 dígitos de un SKU compuesto.
+
+    Ej: '1003226-1007031-S1046' → ['1003226', '1007031']
+        '1003226'               → ['1003226']
+        'ENVIO'                 → []
+    """
+    import re
+    if not sku_woo:
+        return []
+    partes = str(sku_woo).split('-')
+    return [p for p in partes if re.fullmatch(r'\d{7,8}', p)]
