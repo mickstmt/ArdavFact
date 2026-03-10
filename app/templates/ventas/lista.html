@@ -122,12 +122,13 @@
         <th>N° Orden</th>
         <th>Tipo</th>
         <th>Comprobante</th>
+        <th style="white-space:nowrap;">F. Pedido</th>
+        <th style="white-space:nowrap;">F. Emisión</th>
         <th>Cliente</th>
         <th>Documento</th>
         <th class="text-end">Total</th>
         <th class="text-end">IGV</th>
         <th>Estado</th>
-        <th>Fecha</th>
         <th>Acciones</th>
       </tr>
     </thead>
@@ -150,6 +151,12 @@
             {{ c.numero_completo }}
           </a>
         </td>
+        <td style="color:var(--af-text-muted); white-space:nowrap; font-size:0.82rem;">
+          {% if c.fecha_pedido %}{{ c.fecha_pedido.strftime('%d/%m/%Y') }}{% else %}<span style="opacity:0.4;">—</span>{% endif %}
+        </td>
+        <td style="color:var(--af-text-muted); white-space:nowrap; font-size:0.82rem;">
+          {{ c.fecha_emision.strftime('%d/%m/%Y %H:%M') }}
+        </td>
         <td>{{ c.cliente.nombre_completo }}</td>
         <td style="color:var(--af-text-muted);">
           {{ c.cliente.tipo_documento }} {{ c.cliente.numero_documento }}
@@ -157,9 +164,6 @@
         <td class="text-end fw-semibold">S/ {{ '%.2f'|format(c.total) }}</td>
         <td class="text-end" style="color:var(--af-text-muted);">S/ {{ '%.2f'|format(c.total_igv) }}</td>
         <td><span class="badge-estado estado-{{ c.estado }}">{{ c.estado }}</span></td>
-        <td style="color:var(--af-text-muted); white-space:nowrap;">
-          {{ c.fecha_emision.strftime('%d/%m/%Y %H:%M') }}
-        </td>
         <td class="acciones-col">
           <a href="{{ url_for('ventas.detalle_venta', comp_id=c.id) }}" title="Ver detalle">
             <i class="bi bi-eye text-primary"></i>
