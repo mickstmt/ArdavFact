@@ -38,7 +38,11 @@ def importar_costos(ruta_archivo: str) -> None:
             continue
 
         try:
-            costo_raw = str(row.get('costo', '0') or '0').replace(',', '.').strip()
+            # Acepta columna 'costo' o 'fclastcost' (nombre del POS)
+            costo_raw = (
+                str(row.get('costo') or row.get('fclastcost', '0') or '0')
+                .replace(',', '.').strip()
+            )
             costo = Decimal(costo_raw) if costo_raw else Decimal('0')
         except InvalidOperation:
             costo = Decimal('0')
@@ -52,7 +56,7 @@ def importar_costos(ruta_archivo: str) -> None:
         else:
             actualizados += 1
 
-        cp.desc      = str(row.get('descripcion', '') or row.get('desc', '') or '').strip()
+        cp.desc      = str(row.get('descripcion', '') or row.get('desc1', '') or row.get('desc', '') or '').strip()
         cp.colorcode = str(row.get('color', '') or row.get('colorcode', '') or '').strip()
         cp.sizecode  = str(row.get('talla', '') or row.get('sizecode', '') or '').strip()
         cp.costo     = costo
