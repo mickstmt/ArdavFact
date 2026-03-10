@@ -27,7 +27,7 @@
   .estado-RECHAZADO  { background: rgba(220,53,69,0.15); color: #e05c6d; }
   .estado-BORRADOR   { background: rgba(108,117,125,0.12); color: #8a9099; }
   .acciones-col { white-space: nowrap; }
-  .acciones-col a { color: var(--af-text-muted); margin-right: 0.3rem; font-size: 1rem; }
+  .acciones-col a { color: var(--af-text-muted); margin-right: 0.3rem; font-size: 1rem; text-decoration: none; }
   .acciones-col a:hover { color: var(--af-primary); }
   .empty-state { padding: 3rem 1rem; text-align: center; color: var(--af-text-muted); }
   .check-all-wrap { display: flex; align-items: center; gap: 0.5rem; }
@@ -162,19 +162,19 @@
         </td>
         <td class="acciones-col">
           <a href="{{ url_for('ventas.detalle_venta', comp_id=c.id) }}" title="Ver detalle">
-            <i class="bi bi-eye"></i>
+            <i class="bi bi-eye text-primary"></i>
           </a>
           <a href="{{ url_for('comprobantes.descargar_pdf', comp_id=c.id) }}" title="PDF">
-            <i class="bi bi-file-earmark-pdf"></i>
+            <i class="bi bi-file-earmark-pdf text-danger"></i>
           </a>
           {% if c.xml_path %}
           <a href="{{ url_for('comprobantes.descargar_xml', comp_id=c.id) }}" title="XML">
-            <i class="bi bi-file-earmark-code"></i>
+            <i class="bi bi-file-earmark-code text-info"></i>
           </a>
           {% endif %}
           {% if c.cdr_path %}
           <a href="{{ url_for('comprobantes.descargar_cdr', comp_id=c.id) }}" title="CDR">
-            <i class="bi bi-file-earmark-check"></i>
+            <i class="bi bi-file-earmark-check text-success"></i>
           </a>
           {% endif %}
           {% if c.estado == 'PENDIENTE' %}
