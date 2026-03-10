@@ -1,6 +1,9 @@
 """Rutas de comprobantes: descargas PDF/XML/CDR, reenvío a SUNAT, envío en lote e importación."""
 import io
 import os
+import zipfile
+import json
+from datetime import datetime
 from flask import send_file, abort, jsonify, request, current_app, render_template
 from flask_login import login_required
 from werkzeug.utils import secure_filename
@@ -259,6 +262,93 @@ def enviar_lote():
         'enviados': enviados,
         'errores': errores,
     })
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Descarga masiva (ZIP de PDFs / XMLs / CDRs)
+# ─────────────────────────────────────────────────────────────────────────────
+
+@comprobantes_bp.route('/descargar-lote', methods=['POST'])
+@login_required
+@requiere_permiso('ventas.ver')
+def descargar_lote():
+    """Genera un ZIP con PDFs, XMLs o CDRs de los comprobantes seleccionados."""
+    try:
+        payload = request.get_json(force=True) or {}
+        ids          = [int(i) for i in payload.get('ids', []) if str(i).isdigit()]
+        tipo_archivo = payload.get('tipo', 'pdf').lower()
+
+        if not ids or tipo_archivo not in ('pdf', 'xml', 'cdr'):
+            return jsonify({'success': False, 'message': 'Parámetros inválidos.'}), 400
+
+        comprobantes = Comprobante.query.filter(Comprobante.id.in_(ids)).all()
+        if not comprobantes:
+            return jsonify({'success': False, 'message': 'No se encontraron comprobantes.'}), 404
+
+        fs = file_svc.get_file_service()
+        memory_file = io.BytesIO()
+        agregados = 0
+
+        with zipfile.ZipFile(memory_file, 'w', zipfile.ZIP_DEFLATED) as zf:
+            for comp in comprobantes:
+                correlativo_8d = str(comp.correlativo).zfill(8)
+                nombre_base = f"{comp.serie}-{correlativo_8d}"
+                prefix = f"{comp.numero_orden}_{nombre_base}" if comp.numero_orden else nombre_base
+
+                if tipo_archivo == 'pdf':
+                    if not fs.pdf_existe(comp):
+                        try:
+                            pdf_bytes = pdf_service.generar_pdf(comp)
+                            fs.guardar_pdf(comp, pdf_bytes)
+                            db.session.commit()
+                        except Exception as e:
+                            current_app.logger.warning(f'[BULK-PDF] No se pudo generar PDF de {comp.numero_completo}: {e}')
+                            continue
+                    try:
+                        with open(comp.pdf_path, 'rb') as f:
+                            zf.writestr(f'{prefix}.pdf', f.read())
+                        agregados += 1
+                    except Exception:
+                        continue
+
+                elif tipo_archivo == 'xml':
+                    if not fs.xml_existe(comp):
+                        continue
+                    try:
+                        with open(comp.xml_path, 'rb') as f:
+                            zf.writestr(f'{prefix}.xml', f.read())
+                        agregados += 1
+                    except Exception:
+                        continue
+
+                elif tipo_archivo == 'cdr':
+                    if not fs.cdr_existe(comp):
+                        continue
+                    try:
+                        with open(comp.cdr_path, 'rb') as f:
+                            zf.writestr(f'R-{prefix}.xml', f.read())
+                        agregados += 1
+                    except Exception:
+                        continue
+
+        if agregados == 0:
+            return jsonify({'success': False,
+                            'message': f'No se encontraron archivos {tipo_archivo.upper()} para los comprobantes seleccionados.'}), 404
+
+        memory_file.seek(0)
+        timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
+        zip_name = f'comprobantes_{tipo_archivo}_{timestamp}.zip'
+
+        return send_file(
+            memory_file,
+            mimetype='application/zip',
+            as_attachment=True,
+            download_name=zip_name,
+        )
+
+    except Exception as e:
+        current_app.logger.error(f'[BULK-DOWNLOAD] Error: {e}', exc_info=True)
+        return jsonify({'success': False, 'message': f'Error generando ZIP: {e}'}), 500
 
 
 # ─────────────────────────────────────────────────────────────────────────────

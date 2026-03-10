@@ -61,6 +61,13 @@
       <h6 class="fw-semibold mb-3" style="color:var(--af-text);">Datos de la Nota de Crédito</h6>
 
       <div class="mb-3">
+        <label class="form-label" style="font-size:0.82rem; color:var(--af-text-muted);">Fecha de emisión</label>
+        <input type="date" id="fecha-emision-nc" class="form-control form-control-sm"
+          value="{{ today }}" max="{{ today }}"
+          style="background:var(--af-surface-2); border-color:var(--af-border); color:var(--af-text);">
+      </div>
+
+      <div class="mb-3">
         <label class="form-label" style="font-size:0.82rem; color:var(--af-text-muted);">Motivo (Catálogo 09 SUNAT) *</label>
         <select id="motivo-select" class="form-select form-select-sm" style="background:var(--af-surface-2); border-color:var(--af-border); color:var(--af-text);">
           {% for codigo, descripcion in motivos.items() %}
@@ -177,10 +184,11 @@ async function emitirNC() {
 
   const btn = document.getElementById('btn-emitir-nc');
   btnLoading(btn, 'Emitiendo...');
+  const fechaEmision = document.getElementById('fecha-emision-nc').value;
   try {
     const res = await afFetch('/notas/nc/crear', {
       method: 'POST',
-      body: { comp_ref_id: COMP_REF_ID, motivo_codigo: motivoCodigo, motivo_descripcion: motivoDesc },
+      body: { comp_ref_id: COMP_REF_ID, motivo_codigo: motivoCodigo, motivo_descripcion: motivoDesc, fecha_emision: fechaEmision },
     });
     if (res.success) {
       showToast('NC emitida', `${res.numero} — ${res.estado}`, res.sunat_ok ? 'success' : 'danger');

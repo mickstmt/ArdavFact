@@ -93,9 +93,21 @@
 <div class="bulk-bar" id="bulk-bar">
   <i class="bi bi-check2-square"></i>
   <span id="bulk-count">0</span> seleccionados
-  <button class="btn btn-sm btn-light ms-auto" onclick="enviarLote()">
-    <i class="bi bi-send me-1"></i>Enviar a SUNAT
-  </button>
+  <div class="d-flex gap-2 ms-auto">
+    <div class="dropdown">
+      <button class="btn btn-sm btn-light dropdown-toggle" data-bs-toggle="dropdown">
+        <i class="bi bi-download me-1"></i>Descargar
+      </button>
+      <ul class="dropdown-menu shadow border-0">
+        <li><button class="dropdown-item" onclick="descargarLote('pdf')"><i class="bi bi-file-pdf me-2 text-danger"></i>PDFs (ZIP)</button></li>
+        <li><button class="dropdown-item" onclick="descargarLote('xml')"><i class="bi bi-file-code me-2 text-primary"></i>XMLs (ZIP)</button></li>
+        <li><button class="dropdown-item" onclick="descargarLote('cdr')"><i class="bi bi-file-check me-2 text-success"></i>CDRs (ZIP)</button></li>
+      </ul>
+    </div>
+    <button class="btn btn-sm btn-light" onclick="enviarLote()">
+      <i class="bi bi-send me-1"></i>Enviar a SUNAT
+    </button>
+  </div>
 </div>
 
 {# ── Tabla ── #}
@@ -124,8 +136,7 @@
       <tr>
         <td>
           <input type="checkbox" class="row-check" value="{{ c.id }}"
-            data-estado="{{ c.estado }}"
-            {% if c.estado in ('ACEPTADO','ENVIADO') %}disabled{% endif %}>
+            data-estado="{{ c.estado }}">
         </td>
         <td style="color:var(--af-text-muted);">{{ c.numero_orden or '—' }}</td>
         <td>
@@ -237,15 +248,15 @@ const bulkBar  = document.getElementById('bulk-bar');
 const bulkCount = document.getElementById('bulk-count');
 
 function actualizarBulkBar() {
-  const checks = document.querySelectorAll('.row-check:not(:disabled):checked');
+  const checks = document.querySelectorAll('.row-check:checked');
   bulkCount.textContent = checks.length;
   bulkBar.classList.toggle('show', checks.length > 0);
-  if (checkAll) checkAll.indeterminate = (checks.length > 0 && checks.length < document.querySelectorAll('.row-check:not(:disabled)').length);
+  if (checkAll) checkAll.indeterminate = (checks.length > 0 && checks.length < document.querySelectorAll('.row-check').length);
 }
 
 if (checkAll) {
   checkAll.addEventListener('change', () => {
-    document.querySelectorAll('.row-check:not(:disabled)').forEach(c => c.checked = checkAll.checked);
+    document.querySelectorAll('.row-check').forEach(c => c.checked = checkAll.checked);
     actualizarBulkBar();
   });
 }
@@ -268,6 +279,33 @@ async function reenviarSunat(compId) {
     const res = await afFetch(`/comprobantes/${compId}/reenviar`, { method: 'POST' });
     showToast(res.success ? 'Enviado' : 'Error', res.message, res.success ? 'success' : 'danger');
     if (res.success) setTimeout(() => location.reload(), 1500);
+  } catch(e) { showToast('Error', e.message, 'danger'); }
+}
+
+// ── Descarga masiva ──
+async function descargarLote(tipo) {
+  const ids = [...document.querySelectorAll('.row-check:checked')].map(c => c.value);
+  if (!ids.length) return;
+  try {
+    const res = await fetch('/comprobantes/descargar-lote', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
+      body: JSON.stringify({ ids, tipo }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      showToast('Error', data.message || 'No se encontraron archivos.', 'danger');
+      return;
+    }
+    const blob = await res.blob();
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url;
+    a.download = res.headers.get('Content-Disposition')?.match(/filename="?([^"]+)"?/)?.[1] || `comprobantes_${tipo}.zip`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   } catch(e) { showToast('Error', e.message, 'danger'); }
 }
 

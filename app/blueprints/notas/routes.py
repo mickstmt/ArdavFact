@@ -1,5 +1,5 @@
 """Rutas para Notas de Crédito y Notas de Débito."""
-from datetime import datetime
+from datetime import datetime, date
 from decimal import Decimal
 from flask import render_template, request, jsonify, abort, current_app
 from flask_login import login_required, current_user
@@ -33,6 +33,7 @@ def nueva_nc():
     return render_template('notas/nueva_nc.html',
         comp_ref=comp_ref,
         motivos=MOTIVOS_NC,
+        today=date.today().isoformat(),
     )
 
 
@@ -46,6 +47,11 @@ def crear_nc():
         comp_ref_id   = int(payload.get('comp_ref_id', 0))
         motivo_codigo = payload.get('motivo_codigo', '01').strip()
         motivo_desc   = payload.get('motivo_descripcion', '').strip()
+        fecha_str     = payload.get('fecha_emision', '').strip()
+        try:
+            fecha_emision_nc = datetime.strptime(fecha_str, '%Y-%m-%d') if fecha_str else datetime.utcnow()
+        except ValueError:
+            fecha_emision_nc = datetime.utcnow()
 
         comp_ref = db.session.get(Comprobante, comp_ref_id)
         if not comp_ref:
@@ -74,7 +80,7 @@ def crear_nc():
             costo_envio=costo_envio_ref,
             descuento=descuento_ref,
             estado='PENDIENTE',
-            fecha_emision=datetime.utcnow(),
+            fecha_emision=fecha_emision_nc,
             comprobante_referencia_id=comp_ref.id,
             motivo_codigo=motivo_codigo,
             motivo_descripcion=motivo_texto,
