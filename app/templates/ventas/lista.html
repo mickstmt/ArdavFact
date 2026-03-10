@@ -168,7 +168,7 @@
           <a href="{{ url_for('ventas.detalle_venta', comp_id=c.id) }}" title="Ver detalle">
             <i class="bi bi-eye text-primary"></i>
           </a>
-          <a href="{{ url_for('comprobantes.descargar_pdf', comp_id=c.id) }}" title="PDF">
+          <a href="{{ url_for('comprobantes.descargar_pdf', comp_id=c.id) }}" title="PDF" target="_blank">
             <i class="bi bi-file-earmark-pdf text-danger"></i>
           </a>
           {% if c.xml_path %}
