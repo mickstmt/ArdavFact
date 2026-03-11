@@ -12,31 +12,36 @@
 </div>
 
 <div class="af-card p-3 mb-3">
-  <p class="text-muted small mb-4">
+  <p class="text-muted small mb-3">
     Lista todos los comprobantes enviados a SUNAT con su estado de procesamiento,
     código de respuesta y documento de referencia para Notas de Crédito. Excluye borradores.
   </p>
 
-  <form method="GET" action="{{ url_for('reportes.envio_sunat_exportar') }}">
-    <div class="row g-3 align-items-end">
-      <div class="col-12 col-md-4">
-        <label class="form-label small text-muted fw-semibold">Fecha Inicio</label>
-        <input type="date" name="fecha_ini" value="{{ fecha_ini }}"
-               class="form-control form-control-sm" required>
-      </div>
-      <div class="col-12 col-md-4">
-        <label class="form-label small text-muted fw-semibold">Fecha Fin</label>
-        <input type="date" name="fecha_fin" value="{{ fecha_fin }}"
-               class="form-control form-control-sm" required>
-      </div>
-      <div class="col-12 col-md-4">
-        <button type="submit" class="btn btn-primary btn-sm w-100">
-          <i class="bi bi-file-earmark-excel-fill me-1"></i>Descargar Excel
-        </button>
-      </div>
+  <div class="row g-3 align-items-end">
+    <div class="col-12 col-md-4">
+      <label class="form-label small text-muted fw-semibold">Fecha Inicio</label>
+      <input type="date" id="fecha-ini" value="{{ fecha_ini }}"
+             class="form-control form-control-sm" required>
     </div>
-  </form>
+    <div class="col-12 col-md-4">
+      <label class="form-label small text-muted fw-semibold">Fecha Fin</label>
+      <input type="date" id="fecha-fin" value="{{ fecha_fin }}"
+             class="form-control form-control-sm" required>
+    </div>
+    <div class="col-12 col-md-4 d-flex gap-2">
+      <button type="button" id="btn-preview" class="btn btn-outline-primary btn-sm flex-fill">
+        <i class="bi bi-eye me-1"></i>Previsualizar
+      </button>
+      <a id="btn-excel"
+         href="{{ url_for('reportes.envio_sunat_exportar') }}?fecha_ini={{ fecha_ini }}&fecha_fin={{ fecha_fin }}"
+         class="btn btn-primary btn-sm flex-fill">
+        <i class="bi bi-file-earmark-excel-fill me-1"></i>Excel
+      </a>
+    </div>
+  </div>
 </div>
+
+<div id="preview-container"></div>
 
 <div class="alert alert-info border-0 d-flex align-items-start gap-2 small">
   <i class="bi bi-info-circle-fill mt-1 flex-shrink-0"></i>
@@ -47,4 +52,93 @@
     <strong>CodRes:</strong> 0 = sin observaciones &nbsp;·&nbsp; 2108 = presentación fuera de fecha.
   </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const urlPreview  = '{{ url_for("reportes.envio_sunat_preview") }}';
+const urlExportar = '{{ url_for("reportes.envio_sunat_exportar") }}';
+
+function buildExcelHref() {
+  const ini = document.getElementById('fecha-ini').value;
+  const fin = document.getElementById('fecha-fin').value;
+  document.getElementById('btn-excel').href = urlExportar + '?fecha_ini=' + ini + '&fecha_fin=' + fin;
+}
+document.getElementById('fecha-ini').addEventListener('change', buildExcelHref);
+document.getElementById('fecha-fin').addEventListener('change', buildExcelHref);
+
+const ESTADO_COLOR = { A: 'success', E: 'primary', R: 'danger', P: 'warning', B: 'secondary' };
+
+document.getElementById('btn-preview').addEventListener('click', async function () {
+  const ini = document.getElementById('fecha-ini').value;
+  const fin = document.getElementById('fecha-fin').value;
+  if (!ini || !fin) { showToast('Selecciona el rango de fechas.', 'warning'); return; }
+
+  const btn = this;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Cargando...';
+  const container = document.getElementById('preview-container');
+
+  try {
+    const res  = await fetch(urlPreview + '?fecha_ini=' + ini + '&fecha_fin=' + fin);
+    const data = await res.json();
+    if (data.error) { showToast(data.error, 'danger'); return; }
+
+    if (data.total === 0) {
+      container.innerHTML = '<div class="alert alert-warning small mb-3">No se encontraron comprobantes para el período seleccionado.</div>';
+      return;
+    }
+
+    let rows = '';
+    data.rows.forEach(r => {
+      const badge  = `<span class="badge bg-${ESTADO_COLOR[r.estado] || 'secondary'}">${r.estado}</span>`;
+      const docRef = r.doc_ref ? `<code style="font-size:0.78rem;">${r.doc_ref}</code>` : '<span class="text-muted opacity-50">—</span>';
+      const env    = `<span class="badge ${r.enviado ? 'bg-success' : 'bg-secondary'}">${r.enviado}</span>`;
+      rows += `<tr>
+        <td class="ps-3">${r.tipo}</td>
+        <td><code style="font-size:0.78rem;">${r.numero}</code></td>
+        <td class="text-nowrap">${r.fecha}</td>
+        <td class="text-center">${badge}</td>
+        <td>${docRef}</td>
+        <td class="text-muted" style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${r.respuesta}">${r.respuesta || '—'}</td>
+        <td class="text-center">${r.cod_res || '0'}</td>
+        <td class="text-center pe-3">${env}</td>
+      </tr>`;
+    });
+
+    container.innerHTML = `
+      <div class="af-card overflow-hidden mb-3">
+        <div class="px-3 pt-3 pb-2 d-flex justify-content-between align-items-center flex-wrap gap-2">
+          <span class="fw-semibold small">${data.total} comprobante${data.total !== 1 ? 's' : ''} — período ${ini} al ${fin}</span>
+          <a href="${urlExportar}?fecha_ini=${ini}&fecha_fin=${fin}" class="btn btn-success btn-sm">
+            <i class="bi bi-file-earmark-excel-fill me-1"></i>Descargar Excel
+          </a>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-sm table-hover mb-0" style="font-size:0.8rem;">
+            <thead style="background:var(--af-surface-2); color:var(--af-text-muted);">
+              <tr>
+                <th class="ps-3">Tipo</th>
+                <th>Número</th>
+                <th>Fecha</th>
+                <th class="text-center">Estado</th>
+                <th>Doc. Referencia</th>
+                <th>Respuesta SUNAT</th>
+                <th class="text-center">CodRes</th>
+                <th class="text-center pe-3">Enviado</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+      </div>`;
+    container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } catch (e) {
+    showToast('Error al cargar la previsualización.', 'danger');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-eye me-1"></i>Previsualizar';
+  }
+});
+</script>
 {% endblock %}

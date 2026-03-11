@@ -475,6 +475,54 @@ def envio_sunat():
                            fecha_ini=fecha_ini, fecha_fin=fecha_fin)
 
 
+@reportes_bp.route('/envio-sunat/preview')
+@login_required
+@requiere_permiso('reportes.ver')
+def envio_sunat_preview():
+    """Devuelve JSON con los datos del Registro de Envío SUNAT para previsualización."""
+    from flask import jsonify
+    fecha_ini_str = request.args.get('fecha_ini', '')
+    fecha_fin_str = request.args.get('fecha_fin', '')
+    if not fecha_ini_str or not fecha_fin_str:
+        return jsonify({'error': 'Debe indicar rango de fechas.'}), 400
+
+    comprobantes = (Comprobante.query
+                    .filter(Comprobante.estado != 'BORRADOR',
+                            Comprobante.fecha_emision.between(
+                                f'{fecha_ini_str} 00:00:00',
+                                f'{fecha_fin_str} 23:59:59'))
+                    .order_by(Comprobante.fecha_emision)
+                    .all())
+
+    TIPO_NOMBRE = {
+        'BOLETA':       'Boleta de Venta',
+        'NOTA_CREDITO': 'Nota de Crédito',
+        'FACTURA':      'Factura de Venta',
+    }
+    ESTADO_LETRA = {
+        'ACEPTADO': 'A', 'ENVIADO': 'E', 'RECHAZADO': 'R',
+        'PENDIENTE': 'P', 'BORRADOR': 'B',
+    }
+
+    rows = []
+    for comp in comprobantes:
+        ref_num = ''
+        if comp.tipo_comprobante in ('NOTA_CREDITO', 'NOTA_DEBITO') and comp.comprobante_ref:
+            ref_num = comp.comprobante_ref.numero_completo
+        rows.append({
+            'tipo':      TIPO_NOMBRE.get(comp.tipo_comprobante, comp.tipo_comprobante),
+            'numero':    comp.numero_completo,
+            'fecha':     comp.fecha_emision.strftime('%d/%m/%Y') if comp.fecha_emision else '',
+            'estado':    ESTADO_LETRA.get(comp.estado, comp.estado[:1] if comp.estado else ''),
+            'doc_ref':   ref_num,
+            'respuesta': comp.mensaje_sunat or '',
+            'cod_res':   str(comp.codigo_sunat) if comp.codigo_sunat is not None else '',
+            'enviado':   1 if comp.estado in ('ENVIADO', 'ACEPTADO') else 0,
+        })
+
+    return jsonify({'total': len(rows), 'rows': rows})
+
+
 @reportes_bp.route('/envio-sunat/exportar')
 @login_required
 @requiere_permiso('reportes.ver')
@@ -614,6 +662,72 @@ def registro_ventas():
     fecha_fin = request.args.get('fecha_fin') or hoy.strftime('%Y-%m-%d')
     return render_template('reportes/registro_ventas.html',
                            fecha_ini=fecha_ini, fecha_fin=fecha_fin)
+
+
+@reportes_bp.route('/registro-ventas/preview')
+@login_required
+@requiere_permiso('reportes.ver')
+def registro_ventas_preview():
+    """Devuelve JSON con los datos del Registro de Ventas para previsualización."""
+    from flask import jsonify
+    fecha_ini_str = request.args.get('fecha_ini', '')
+    fecha_fin_str = request.args.get('fecha_fin', '')
+    if not fecha_ini_str or not fecha_fin_str:
+        return jsonify({'error': 'Debe indicar rango de fechas.'}), 400
+
+    comprobantes = (Comprobante.query
+                    .filter(Comprobante.estado.notin_(['BORRADOR', 'RECHAZADO']),
+                            Comprobante.fecha_emision.between(
+                                f'{fecha_ini_str} 00:00:00',
+                                f'{fecha_fin_str} 23:59:59'))
+                    .order_by(Comprobante.tipo_comprobante, Comprobante.fecha_emision)
+                    .all())
+
+    def tipo_doc_sunat(comp):
+        if comp.tipo_comprobante == 'NOTA_CREDITO':
+            return '07'
+        if comp.serie and comp.serie.upper().startswith('F'):
+            return '01'
+        return '03'
+
+    rows = []
+    nro = 0
+    total_base = total_igv = total_tot = 0.0
+    for comp in comprobantes:
+        nro += 1
+        total_v = float(comp.total or 0)
+        if comp.tipo_comprobante == 'NOTA_CREDITO':
+            total_v = -abs(total_v)
+        b = round(total_v / 1.18, 2)
+        i = round(total_v * 18 / 118, 2)
+        tc = get_tipo_cambio(comp.fecha_emision) or 0.0
+        ref_num = ''
+        if comp.tipo_comprobante == 'NOTA_CREDITO' and comp.comprobante_ref:
+            ref_num = comp.comprobante_ref.numero_completo
+        total_base += b
+        total_igv  += i
+        total_tot  += total_v
+        rows.append({
+            'nro':      nro,
+            'fecha':    comp.fecha_emision.strftime('%d/%m/%Y') if comp.fecha_emision else '',
+            'tipo_doc': tipo_doc_sunat(comp),
+            'serie':    comp.serie or '',
+            'numero':   str(comp.correlativo).zfill(8),
+            'nombre':   comp.cliente.nombre_completo if comp.cliente else '—',
+            'base_imp': b,
+            'igv':      i,
+            'total':    total_v,
+            'tc':       round(float(tc), 4) if tc else '',
+            'ref_num':  ref_num,
+        })
+
+    return jsonify({
+        'total':      len(rows),
+        'rows':       rows,
+        'total_base': round(total_base, 2),
+        'total_igv':  round(total_igv, 2),
+        'total_tot':  round(total_tot, 2),
+    })
 
 
 @reportes_bp.route('/registro-ventas/exportar')
