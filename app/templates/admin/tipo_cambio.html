@@ -77,17 +77,17 @@
     <table class="table table-sm align-middle mb-0">
       <thead>
         <tr>
-          <th>Fecha</th>
+          <th class="ps-3">Fecha</th>
           <th>Tipo de Cambio</th>
-          <th class="text-end">Acción</th>
+          <th class="text-end pe-3">Acción</th>
         </tr>
       </thead>
       <tbody>
         {% for tc in registros %}
         <tr>
-          <td class="fw-semibold">{{ tc.fecha.strftime('%d/%m/%Y') }}</td>
+          <td class="ps-3 fw-semibold">{{ tc.fecha.strftime('%d/%m/%Y') }}</td>
           <td>S/. {{ '%.4f'|format(tc.valor|float) }}</td>
-          <td class="text-end">
+          <td class="text-end pe-3">
             <form method="POST" action="{{ url_for('admin.tipo_cambio_eliminar', tc_id=tc.id) }}"
                   onsubmit="return confirm('¿Eliminar TC del {{ tc.fecha.strftime('%d/%m/%Y') }}?')">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
