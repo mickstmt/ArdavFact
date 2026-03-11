@@ -41,9 +41,7 @@
   </div>
 </div>
 
-<div id="preview-container"></div>
-
-<div class="alert alert-info border-0 d-flex align-items-start gap-2 small">
+<div class="alert alert-info border-0 d-flex align-items-start gap-2 small mb-3">
   <i class="bi bi-info-circle-fill mt-1 flex-shrink-0"></i>
   <div>
     <strong>Estado:</strong> A = Aceptado &nbsp;·&nbsp; E = Enviado &nbsp;·&nbsp;
@@ -52,6 +50,8 @@
     <strong>CodRes:</strong> 0 = sin observaciones &nbsp;·&nbsp; 2108 = presentación fuera de fecha.
   </div>
 </div>
+
+<div id="preview-container"></div>
 {% endblock %}
 
 {% block extra_js %}
@@ -68,6 +68,53 @@ document.getElementById('fecha-ini').addEventListener('change', buildExcelHref);
 document.getElementById('fecha-fin').addEventListener('change', buildExcelHref);
 
 const ESTADO_COLOR = { A: 'success', E: 'primary', R: 'danger', P: 'warning', B: 'secondary' };
+const PER_PAGE = 50;
+let allRows = [], curPage = 1, curIni = '', curFin = '';
+
+function renderRowE(r) {
+  const badge  = `<span class="badge bg-${ESTADO_COLOR[r.estado] || 'secondary'}">${r.estado}</span>`;
+  const docRef = r.doc_ref ? `<code style="font-size:0.78rem;">${r.doc_ref}</code>` : '<span class="text-muted opacity-50">—</span>';
+  const env    = `<span class="badge ${r.enviado ? 'bg-success' : 'bg-secondary'}">${r.enviado}</span>`;
+  return `<tr>
+    <td class="ps-3">${r.tipo}</td>
+    <td><code style="font-size:0.78rem;">${r.numero}</code></td>
+    <td class="text-nowrap">${r.fecha}</td>
+    <td class="text-center">${badge}</td>
+    <td>${docRef}</td>
+    <td class="text-muted" style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${r.respuesta}">${r.respuesta || '—'}</td>
+    <td class="text-center">${r.cod_res || '0'}</td>
+    <td class="text-center pe-3">${env}</td>
+  </tr>`;
+}
+
+function buildPager(total, page) {
+  const tp = Math.ceil(total / PER_PAGE);
+  if (tp <= 1) return '';
+  const s = (page - 1) * PER_PAGE + 1, e = Math.min(page * PER_PAGE, total);
+  let pages = '';
+  for (let p = 1; p <= tp; p++) {
+    if (p === 1 || p === tp || (p >= page - 2 && p <= page + 2))
+      pages += `<li class="page-item ${p === page ? 'active' : ''}"><button class="page-link" onclick="goPageE(${p})">${p}</button></li>`;
+    else if (p === 2 || p === tp - 1)
+      pages += `<li class="page-item disabled"><span class="page-link">…</span></li>`;
+  }
+  return `<div class="d-flex justify-content-between align-items-center px-3 py-2 border-top" style="background:var(--af-surface-2);font-size:0.8rem;">
+    <span class="text-muted">Mostrando <strong>${s}–${e}</strong> de <strong>${total}</strong></span>
+    <nav><ul class="pagination pagination-sm mb-0">
+      <li class="page-item ${page <= 1 ? 'disabled' : ''}"><button class="page-link" onclick="goPageE(${page - 1})"><i class="bi bi-chevron-left"></i></button></li>
+      ${pages}
+      <li class="page-item ${page >= tp ? 'disabled' : ''}"><button class="page-link" onclick="goPageE(${page + 1})"><i class="bi bi-chevron-right"></i></button></li>
+    </ul></nav>
+  </div>`;
+}
+
+function goPageE(p) {
+  curPage = p;
+  const slice = allRows.slice((p - 1) * PER_PAGE, p * PER_PAGE);
+  document.getElementById('preview-tbody').innerHTML = slice.map(renderRowE).join('');
+  document.getElementById('preview-pager').innerHTML = buildPager(allRows.length, p);
+  document.getElementById('preview-container').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
 
 document.getElementById('btn-preview').addEventListener('click', async function () {
   const ini = document.getElementById('fecha-ini').value;
@@ -89,22 +136,8 @@ document.getElementById('btn-preview').addEventListener('click', async function 
       return;
     }
 
-    let rows = '';
-    data.rows.forEach(r => {
-      const badge  = `<span class="badge bg-${ESTADO_COLOR[r.estado] || 'secondary'}">${r.estado}</span>`;
-      const docRef = r.doc_ref ? `<code style="font-size:0.78rem;">${r.doc_ref}</code>` : '<span class="text-muted opacity-50">—</span>';
-      const env    = `<span class="badge ${r.enviado ? 'bg-success' : 'bg-secondary'}">${r.enviado}</span>`;
-      rows += `<tr>
-        <td class="ps-3">${r.tipo}</td>
-        <td><code style="font-size:0.78rem;">${r.numero}</code></td>
-        <td class="text-nowrap">${r.fecha}</td>
-        <td class="text-center">${badge}</td>
-        <td>${docRef}</td>
-        <td class="text-muted" style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${r.respuesta}">${r.respuesta || '—'}</td>
-        <td class="text-center">${r.cod_res || '0'}</td>
-        <td class="text-center pe-3">${env}</td>
-      </tr>`;
-    });
+    allRows = data.rows; curPage = 1; curIni = ini; curFin = fin;
+    const firstPage = allRows.slice(0, PER_PAGE);
 
     container.innerHTML = `
       <div class="af-card overflow-hidden mb-3">
@@ -118,19 +151,16 @@ document.getElementById('btn-preview').addEventListener('click', async function 
           <table class="table table-sm table-hover mb-0" style="font-size:0.8rem;">
             <thead style="background:var(--af-surface-2); color:var(--af-text-muted);">
               <tr>
-                <th class="ps-3">Tipo</th>
-                <th>Número</th>
-                <th>Fecha</th>
-                <th class="text-center">Estado</th>
-                <th>Doc. Referencia</th>
-                <th>Respuesta SUNAT</th>
-                <th class="text-center">CodRes</th>
+                <th class="ps-3">Tipo</th><th>Número</th><th>Fecha</th>
+                <th class="text-center">Estado</th><th>Doc. Referencia</th>
+                <th>Respuesta SUNAT</th><th class="text-center">CodRes</th>
                 <th class="text-center pe-3">Enviado</th>
               </tr>
             </thead>
-            <tbody>${rows}</tbody>
+            <tbody id="preview-tbody">${firstPage.map(renderRowE).join('')}</tbody>
           </table>
         </div>
+        <div id="preview-pager">${buildPager(data.total, 1)}</div>
       </div>`;
     container.scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (e) {

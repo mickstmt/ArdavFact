@@ -43,9 +43,7 @@
   </div>
 </div>
 
-<div id="preview-container"></div>
-
-<div class="alert alert-info border-0 d-flex align-items-start gap-2 small">
+<div class="alert alert-info border-0 d-flex align-items-start gap-2 small mb-3">
   <i class="bi bi-info-circle-fill mt-1 flex-shrink-0"></i>
   <div>
     <strong>Tipo de cambio:</strong> Se usa el TC registrado para la fecha de emisión de cada comprobante.
@@ -54,6 +52,8 @@
     <a href="{{ url_for('admin.tipo_cambio') }}" class="alert-link ms-1">Gestionar tipos de cambio →</a>
   </div>
 </div>
+
+<div id="preview-container"></div>
 {% endblock %}
 
 {% block extra_js %}
@@ -69,7 +69,69 @@ function buildExcelHref() {
 document.getElementById('fecha-ini').addEventListener('change', buildExcelHref);
 document.getElementById('fecha-fin').addEventListener('change', buildExcelHref);
 
-const TIPO_DOC_LABEL = { '01': 'Factura (01)', '03': 'Boleta (03)', '07': 'Nota Crédito (07)' };
+const PER_PAGE = 50;
+let allRowsRV = [], curPageRV = 1, totalesRV = {};
+
+const fmt = n => 'S/ ' + Number(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+
+function renderRowRV(r) {
+  const esNC  = r.tipo_doc === '07';
+  const cls   = esNC ? 'text-danger' : '';
+  const ref   = r.ref_num ? `<code style="font-size:0.78rem;">${r.ref_num}</code>` : '<span class="text-muted opacity-50">—</span>';
+  return `<tr>
+    <td class="text-center ps-3">${r.nro}</td>
+    <td class="text-nowrap">${r.fecha}</td>
+    <td class="text-center"><span class="badge bg-secondary">${r.tipo_doc}</span></td>
+    <td class="text-center">${r.serie}</td>
+    <td class="text-center">${r.numero}</td>
+    <td>${r.nombre}</td>
+    <td class="text-end ${cls}">${fmt(r.base_imp)}</td>
+    <td class="text-end ${cls}">${fmt(r.igv)}</td>
+    <td class="text-end fw-semibold ${cls}">${fmt(r.total)}</td>
+    <td class="text-end">${r.tc !== '' ? Number(r.tc).toFixed(4) : '<span class="text-muted">—</span>'}</td>
+    <td class="pe-3">${ref}</td>
+  </tr>`;
+}
+
+function buildPagerRV(total, page) {
+  const tp = Math.ceil(total / PER_PAGE);
+  if (tp <= 1) return '';
+  const s = (page - 1) * PER_PAGE + 1, e = Math.min(page * PER_PAGE, total);
+  let pages = '';
+  for (let p = 1; p <= tp; p++) {
+    if (p === 1 || p === tp || (p >= page - 2 && p <= page + 2))
+      pages += `<li class="page-item ${p === page ? 'active' : ''}"><button class="page-link" onclick="goPageRV(${p})">${p}</button></li>`;
+    else if (p === 2 || p === tp - 1)
+      pages += `<li class="page-item disabled"><span class="page-link">…</span></li>`;
+  }
+  return `<div class="d-flex justify-content-between align-items-center px-3 py-2 border-top" style="background:var(--af-surface-2);font-size:0.8rem;">
+    <span class="text-muted">Mostrando <strong>${s}–${e}</strong> de <strong>${total}</strong></span>
+    <nav><ul class="pagination pagination-sm mb-0">
+      <li class="page-item ${page <= 1 ? 'disabled' : ''}"><button class="page-link" onclick="goPageRV(${page - 1})"><i class="bi bi-chevron-left"></i></button></li>
+      ${pages}
+      <li class="page-item ${page >= tp ? 'disabled' : ''}"><button class="page-link" onclick="goPageRV(${page + 1})"><i class="bi bi-chevron-right"></i></button></li>
+    </ul></nav>
+  </div>`;
+}
+
+function buildTotRow() {
+  return `<tr style="background:var(--af-surface-2);">
+    <td colspan="6" class="text-end fw-semibold ps-3 small">Totales</td>
+    <td class="text-end fw-semibold">${fmt(totalesRV.base)}</td>
+    <td class="text-end fw-semibold">${fmt(totalesRV.igv)}</td>
+    <td class="text-end fw-bold">${fmt(totalesRV.tot)}</td>
+    <td colspan="2" class="pe-3"></td>
+  </tr>`;
+}
+
+function goPageRV(p) {
+  curPageRV = p;
+  const slice = allRowsRV.slice((p - 1) * PER_PAGE, p * PER_PAGE);
+  const isLast = p === Math.ceil(allRowsRV.length / PER_PAGE);
+  document.getElementById('preview-tbody').innerHTML = slice.map(renderRowRV).join('') + (isLast ? buildTotRow() : '');
+  document.getElementById('preview-pager').innerHTML = buildPagerRV(allRowsRV.length, p);
+  document.getElementById('preview-container').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
 
 document.getElementById('btn-preview').addEventListener('click', async function () {
   const ini = document.getElementById('fecha-ini').value;
@@ -91,35 +153,10 @@ document.getElementById('btn-preview').addEventListener('click', async function 
       return;
     }
 
-    const fmt = n => 'S/ ' + Number(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-
-    let rows = '';
-    data.rows.forEach(r => {
-      const esNC = r.tipo_doc === '07';
-      const clsTotal = esNC ? 'text-danger' : '';
-      const ref = r.ref_num ? `<code style="font-size:0.78rem;">${r.ref_num}</code>` : '<span class="text-muted opacity-50">—</span>';
-      rows += `<tr>
-        <td class="text-center ps-3">${r.nro}</td>
-        <td class="text-nowrap">${r.fecha}</td>
-        <td class="text-center"><span class="badge bg-secondary">${r.tipo_doc}</span></td>
-        <td class="text-center">${r.serie}</td>
-        <td class="text-center">${r.numero}</td>
-        <td>${r.nombre}</td>
-        <td class="text-end ${clsTotal}">${fmt(r.base_imp)}</td>
-        <td class="text-end ${clsTotal}">${fmt(r.igv)}</td>
-        <td class="text-end fw-semibold ${clsTotal}">${fmt(r.total)}</td>
-        <td class="text-end">${r.tc !== '' ? Number(r.tc).toFixed(4) : '<span class="text-muted">—</span>'}</td>
-        <td class="pe-3">${ref}</td>
-      </tr>`;
-    });
-
-    const totRow = `<tr style="background:var(--af-surface-2);">
-      <td colspan="6" class="text-end fw-semibold ps-3 small">Totales</td>
-      <td class="text-end fw-semibold">${fmt(data.total_base)}</td>
-      <td class="text-end fw-semibold">${fmt(data.total_igv)}</td>
-      <td class="text-end fw-bold">${fmt(data.total_tot)}</td>
-      <td colspan="2" class="pe-3"></td>
-    </tr>`;
+    allRowsRV = data.rows; curPageRV = 1;
+    totalesRV = { base: data.total_base, igv: data.total_igv, tot: data.total_tot };
+    const firstPage = allRowsRV.slice(0, PER_PAGE);
+    const isLast1 = allRowsRV.length <= PER_PAGE;
 
     container.innerHTML = `
       <div class="af-card overflow-hidden mb-3">
@@ -133,22 +170,18 @@ document.getElementById('btn-preview').addEventListener('click', async function 
           <table class="table table-sm table-hover mb-0" style="font-size:0.8rem;">
             <thead style="background:var(--af-surface-2); color:var(--af-text-muted);">
               <tr>
-                <th class="text-center ps-3">Nro.</th>
-                <th>Fecha</th>
-                <th class="text-center">Tipo</th>
-                <th class="text-center">Serie</th>
-                <th class="text-center">Número</th>
-                <th>Cliente</th>
-                <th class="text-end">Base Imp.</th>
-                <th class="text-end">IGV</th>
-                <th class="text-end">Total</th>
-                <th class="text-end">TC</th>
+                <th class="text-center ps-3">Nro.</th><th>Fecha</th>
+                <th class="text-center">Tipo</th><th class="text-center">Serie</th>
+                <th class="text-center">Número</th><th>Cliente</th>
+                <th class="text-end">Base Imp.</th><th class="text-end">IGV</th>
+                <th class="text-end">Total</th><th class="text-end">TC</th>
                 <th class="pe-3">Ref.</th>
               </tr>
             </thead>
-            <tbody>${rows}${totRow}</tbody>
+            <tbody id="preview-tbody">${firstPage.map(renderRowRV).join('') + (isLast1 ? buildTotRow() : '')}</tbody>
           </table>
         </div>
+        <div id="preview-pager">${buildPagerRV(data.total, 1)}</div>
       </div>`;
     container.scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (e) {
