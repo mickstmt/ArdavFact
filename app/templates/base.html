@@ -125,6 +125,10 @@
      class="af-sidebar-link {% if request.endpoint in ('reportes.registro_ventas', 'reportes.registro_ventas_exportar') %}active{% endif %}">
     <i class="bi bi-file-earmark-spreadsheet"></i>Reg. Ventas e Ingresos
   </a>
+  <a href="{{ url_for('reportes.envio_sunat') }}"
+     class="af-sidebar-link {% if request.endpoint in ('reportes.envio_sunat', 'reportes.envio_sunat_exportar') %}active{% endif %}">
+    <i class="bi bi-cloud-check"></i>Envío SUNAT
+  </a>
   {% endif %}
 
   <div class="af-sidebar-section">Diseño</div>

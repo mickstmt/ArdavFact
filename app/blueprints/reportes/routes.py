@@ -459,6 +459,136 @@ def _enriquecer_fila(comp: Comprobante, mapa_costos: dict) -> dict:
     }
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Registro de Envío SUNAT
+# ─────────────────────────────────────────────────────────────────────────────
+
+@reportes_bp.route('/envio-sunat')
+@login_required
+@requiere_permiso('reportes.ver')
+def envio_sunat():
+    """Formulario de parámetros para el Registro de Envío SUNAT."""
+    hoy       = date.today()
+    fecha_ini = request.args.get('fecha_ini') or hoy.replace(day=1).strftime('%Y-%m-%d')
+    fecha_fin = request.args.get('fecha_fin') or hoy.strftime('%Y-%m-%d')
+    return render_template('reportes/envio_sunat.html',
+                           fecha_ini=fecha_ini, fecha_fin=fecha_fin)
+
+
+@reportes_bp.route('/envio-sunat/exportar')
+@login_required
+@requiere_permiso('reportes.ver')
+def envio_sunat_exportar():
+    """Genera y descarga el Excel de Registro de Envío SUNAT."""
+    import openpyxl
+    from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+    from openpyxl.utils import get_column_letter
+
+    fecha_ini_str = request.args.get('fecha_ini', '')
+    fecha_fin_str = request.args.get('fecha_fin', '')
+
+    if not fecha_ini_str or not fecha_fin_str:
+        from flask import flash, redirect, url_for
+        flash('Debe indicar rango de fechas.', 'danger')
+        return redirect(url_for('reportes.envio_sunat'))
+
+    comprobantes = (Comprobante.query
+                    .filter(Comprobante.estado != 'BORRADOR',
+                            Comprobante.fecha_emision.between(
+                                f'{fecha_ini_str} 00:00:00',
+                                f'{fecha_fin_str} 23:59:59'))
+                    .order_by(Comprobante.fecha_emision)
+                    .all())
+
+    TIPO_NOMBRE = {
+        'BOLETA':       'BOLETA DE VENTA ELECTRONICA',
+        'NOTA_CREDITO': 'NOTA CREDITO ELECTRONICA',
+        'FACTURA':      'FACTURA DE VENTA ELECTRONICA',
+    }
+    ESTADO_LETRA = {
+        'ACEPTADO': 'A', 'ENVIADO': 'E', 'RECHAZADO': 'R',
+        'PENDIENTE': 'P', 'BORRADOR': 'B',
+    }
+
+    wb  = openpyxl.Workbook()
+    ws  = wb.active
+    ws.title = 'Envío SUNAT'
+
+    empresa_ruc   = current_app.config.get('EMPRESA_RUC', '')
+    empresa_razon = current_app.config.get('EMPRESA_RAZON_SOCIAL', '')
+
+    thin        = Side(style='thin')
+    border      = Border(left=thin, right=thin, top=thin, bottom=thin)
+    fill_header = PatternFill('solid', fgColor='1F4E79')
+    fill_alt    = PatternFill('solid', fgColor='EEF3FB')
+    align_c = Alignment(horizontal='center', vertical='center')
+    align_l = Alignment(horizontal='left',   vertical='center')
+
+    ws['A1'] = date.today().strftime('%d/%m/%Y')
+    ws['A2'] = f'RUC: {empresa_ruc}'
+    ws['A3'] = f'Razón Social: {empresa_razon}'
+    ws['A4'] = f'Período: {fecha_ini_str} al {fecha_fin_str}'
+    ws['A1'].font = Font(name='Arial', bold=True, size=10)
+    for r in range(2, 5):
+        ws.cell(r, 1).font = Font(name='Arial', size=9)
+
+    HEADERS = ['N.', 'TTienda', 'Documento', 'Documento',
+               'Fecha', 'Estado', 'NumeroOriginal', 'FechaOriginal',
+               'Documento Ref', 'Respuesta Sunat', 'CodRes', 'Enviado']
+    ROW_HDR = 6
+    for ci, h in enumerate(HEADERS, 1):
+        cell = ws.cell(row=ROW_HDR, column=ci, value=h)
+        cell.font      = Font(name='Arial', bold=True, size=9, color='FFFFFF')
+        cell.fill      = fill_header
+        cell.alignment = align_c
+        cell.border    = border
+    ws.row_dimensions[ROW_HDR].height = 18
+
+    col_widths = [6, 10, 28, 18, 12, 8, 14, 12, 18, 60, 8, 8]
+    for i, w in enumerate(col_widths, 1):
+        ws.column_dimensions[get_column_letter(i)].width = w
+
+    for n, comp in enumerate(comprobantes, 1):
+        tipo_nombre  = TIPO_NOMBRE.get(comp.tipo_comprobante, comp.tipo_comprobante)
+        estado_letra = ESTADO_LETRA.get(comp.estado, comp.estado[:1] if comp.estado else '')
+        ref_num      = ''
+        if comp.tipo_comprobante in ('NOTA_CREDITO', 'NOTA_DEBITO') and comp.comprobante_ref:
+            ref_num = comp.comprobante_ref.numero_completo
+        enviado   = 1 if comp.estado in ('ENVIADO', 'ACEPTADO') else 0
+        fecha_str = comp.fecha_emision.strftime('%d/%m/%Y') if comp.fecha_emision else ''
+
+        row_idx = ROW_HDR + n
+        ws.append([
+            0, 'CENTRAL', tipo_nombre, comp.numero_completo, fecha_str,
+            estado_letra, '', '',
+            ref_num,
+            comp.mensaje_sunat or '',
+            comp.codigo_sunat or '',
+            enviado,
+        ])
+        ws.row_dimensions[row_idx].height = 14
+        is_alt = (n % 2 == 0)
+        for ci, cell in enumerate(ws[row_idx], start=1):
+            cell.font   = Font(name='Arial', size=9)
+            cell.border = border
+            if is_alt:
+                cell.fill = fill_alt
+            cell.alignment = align_c if ci in (1, 2, 5, 6, 7, 8, 11, 12) else align_l
+
+    ws.freeze_panes = ws.cell(row=ROW_HDR + 1, column=1)
+
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=f'EnvioSUNAT_{fecha_ini_str}_al_{fecha_fin_str}.xlsx',
+    )
+
+
 def _parse_date(s: str):
     if not s:
         return None

@@ -1,0 +1,50 @@
+{% extends 'base.html' %}
+{% block title %}Registro de Envío SUNAT{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+  <div>
+    <h4 class="mb-0 fw-semibold">
+      <i class="bi bi-cloud-check me-2 text-primary"></i>Registro de Envío SUNAT
+    </h4>
+    <p class="text-muted mb-0 small">Estado de procesamiento SUNAT para el período seleccionado</p>
+  </div>
+</div>
+
+<div class="af-card p-3 mb-3">
+  <p class="text-muted small mb-4">
+    Lista todos los comprobantes enviados a SUNAT con su estado de procesamiento,
+    código de respuesta y documento de referencia para Notas de Crédito. Excluye borradores.
+  </p>
+
+  <form method="GET" action="{{ url_for('reportes.envio_sunat_exportar') }}">
+    <div class="row g-3 align-items-end">
+      <div class="col-12 col-md-4">
+        <label class="form-label small text-muted fw-semibold">Fecha Inicio</label>
+        <input type="date" name="fecha_ini" value="{{ fecha_ini }}"
+               class="form-control form-control-sm" required>
+      </div>
+      <div class="col-12 col-md-4">
+        <label class="form-label small text-muted fw-semibold">Fecha Fin</label>
+        <input type="date" name="fecha_fin" value="{{ fecha_fin }}"
+               class="form-control form-control-sm" required>
+      </div>
+      <div class="col-12 col-md-4">
+        <button type="submit" class="btn btn-primary btn-sm w-100">
+          <i class="bi bi-file-earmark-excel-fill me-1"></i>Descargar Excel
+        </button>
+      </div>
+    </div>
+  </form>
+</div>
+
+<div class="alert alert-info border-0 d-flex align-items-start gap-2 small">
+  <i class="bi bi-info-circle-fill mt-1 flex-shrink-0"></i>
+  <div>
+    <strong>Estado:</strong> A = Aceptado &nbsp;·&nbsp; E = Enviado &nbsp;·&nbsp;
+    R = Rechazado &nbsp;·&nbsp; P = Pendiente.<br>
+    <strong>Enviado:</strong> 1 = procesado por SUNAT &nbsp;·&nbsp; 0 = no enviado o pendiente.<br>
+    <strong>CodRes:</strong> 0 = sin observaciones &nbsp;·&nbsp; 2108 = presentación fuera de fecha.
+  </div>
+</div>
+{% endblock %}
