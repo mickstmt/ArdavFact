@@ -24,6 +24,11 @@ def nc_lote():
     payload       = request.get_json(force=True) or {}
     ids           = [int(i) for i in payload.get('ids', []) if str(i).isdigit()]
     motivo_codigo = payload.get('motivo_codigo', '').strip()
+    fecha_str     = payload.get('fecha_emision', '').strip()
+    try:
+        fecha_emision_nc = datetime.strptime(fecha_str, '%Y-%m-%d') if fecha_str else datetime.utcnow()
+    except ValueError:
+        fecha_emision_nc = datetime.utcnow()
 
     if not motivo_codigo or motivo_codigo not in MOTIVOS_NC:
         return jsonify({'success': False, 'message': 'Motivo inválido.'}), 400
@@ -65,7 +70,7 @@ def nc_lote():
                 costo_envio=costo_envio_ref,
                 descuento=descuento_ref,
                 estado='PENDIENTE',
-                fecha_emision=datetime.utcnow(),
+                fecha_emision=fecha_emision_nc,
                 comprobante_referencia_id=comp_ref.id,
                 motivo_codigo=motivo_codigo,
                 motivo_descripcion=motivo_texto,

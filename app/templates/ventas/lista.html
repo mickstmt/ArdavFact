@@ -365,6 +365,9 @@ function abrirModalNCLote() {
   if (!ids.length) return;
   document.getElementById('nc-lote-count').textContent = ids.length;
   document.getElementById('nc-lote-motivo').value = '';
+  const today = new Date().toISOString().slice(0, 10);
+  document.getElementById('nc-lote-fecha').value = today;
+  document.getElementById('nc-lote-fecha').max   = today;
   new bootstrap.Modal(document.getElementById('modalNCMotivo')).show();
 }
 
@@ -424,7 +427,7 @@ async function confirmarNCLote() {
       const res  = await fetch('/notas/nc/lote', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
-        body: JSON.stringify({ ids: [ids[i]], motivo_codigo: motivo.value }),
+        body: JSON.stringify({ ids: [ids[i]], motivo_codigo: motivo.value, fecha_emision: document.getElementById('nc-lote-fecha').value }),
       });
       const data = await res.json();
       if (data.success && data.creadas > 0) {
@@ -503,6 +506,12 @@ async function confirmarNCLote() {
             <option value="09">09 — DISMINUCION EN EL VALOR</option>
             <option value="10">10 — OTROS CONCEPTOS</option>
           </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold" style="font-size:0.82rem; color:var(--af-text);">Fecha de emisión</label>
+          <input type="date" id="nc-lote-fecha" class="form-select form-select-sm"
+            style="background:var(--af-surface-2); border-color:var(--af-border); color:var(--af-text);"
+            value="{{ today }}" max="{{ today }}">
         </div>
       </div>
       <div class="modal-footer border-0 pt-0 gap-2">

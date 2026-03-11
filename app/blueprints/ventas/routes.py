@@ -281,6 +281,7 @@ def lista_ventas():
         filtros=filtros,
         sort=sort,
         sort_dir=sort_dir,
+        today=date.today().isoformat(),
     )
 
 

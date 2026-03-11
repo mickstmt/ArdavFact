@@ -13,7 +13,7 @@
 
   <!-- Carga individual -->
   <div class="col-md-5">
-    <div class="af-card h-100">
+    <div class="af-card p-3 h-100">
       <h6 class="fw-semibold mb-3"><i class="bi bi-plus-circle text-success me-1"></i>Registrar Fecha Individual</h6>
       <form method="POST" action="{{ url_for('admin.tipo_cambio_guardar') }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -35,7 +35,7 @@
 
   <!-- Carga por rango -->
   <div class="col-md-7">
-    <div class="af-card h-100">
+    <div class="af-card p-3 h-100">
       <h6 class="fw-semibold mb-1"><i class="bi bi-calendar-range text-primary me-1"></i>Carga Masiva por Rango</h6>
       <p class="text-muted small mb-3">Aplica el mismo TC a todos los días del rango (útil para carga mensual).</p>
       <form method="POST" action="{{ url_for('admin.tipo_cambio_guardar_rango') }}">
@@ -66,8 +66,8 @@
 </div>
 
 <!-- Tabla de registros -->
-<div class="af-card">
-  <div class="d-flex justify-content-between align-items-center mb-3">
+<div class="af-card overflow-hidden">
+  <div class="d-flex justify-content-between align-items-center px-3 pt-3 pb-2">
     <h6 class="fw-semibold mb-0"><i class="bi bi-table me-1"></i>Registros cargados</h6>
     <span class="badge bg-secondary">{{ registros|length }} fechas</span>
   </div>
