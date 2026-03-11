@@ -95,15 +95,23 @@
   {% if current_user.tiene_permiso('ventas.ver') %}
   <a href="{{ url_for('ventas.lista_ventas') }}"
      class="af-sidebar-link {% if request.endpoint == 'ventas.lista_ventas' %}active{% endif %}">
-    <i class="bi bi-receipt"></i>Comprobantes
+    <i class="bi bi-receipt"></i>Ventas
   </a>
   {% endif %}
 
-  {% if current_user.tiene_permiso('bulk.upload') %}
   <div class="af-sidebar-section">Operaciones</div>
+
+  {% if current_user.tiene_permiso('bulk.upload') %}
   <a href="{{ url_for('bulk.upload') }}"
      class="af-sidebar-link {% if request.blueprint in ('bulk', 'bulk_falabella') %}active{% endif %}">
     <i class="bi bi-cloud-upload"></i>Carga Masiva
+  </a>
+  {% endif %}
+
+  {% if current_user.tiene_permiso('usuarios.gestionar') %}
+  <a href="{{ url_for('productos.lista_productos') }}"
+     class="af-sidebar-link {% if request.blueprint == 'productos' %}active{% endif %}">
+    <i class="bi bi-shop"></i>Productos / WooCommerce
   </a>
   {% endif %}
 
@@ -119,6 +127,12 @@
   </a>
   {% endif %}
 
+  <div class="af-sidebar-section">Diseño</div>
+  <a href="#"
+     class="af-sidebar-link">
+    <i class="bi bi-file-earmark-text"></i>Diseño PDF
+  </a>
+
   {% if current_user.tiene_permiso('usuarios.gestionar') %}
   <div class="af-sidebar-section">Administración</div>
   <a href="{{ url_for('admin.usuarios') }}"
@@ -126,16 +140,10 @@
     <i class="bi bi-people"></i>Equipo
   </a>
   <a href="{{ url_for('admin.tipo_cambio') }}"
-     class="af-sidebar-link {% if request.endpoint == 'admin.tipo_cambio' %}active{% endif %}">
+     class="af-sidebar-link {% if request.endpoint in ('admin.tipo_cambio', 'admin.tipo_cambio_guardar', 'admin.tipo_cambio_guardar_rango', 'admin.tipo_cambio_eliminar') %}active{% endif %}">
     <i class="bi bi-currency-exchange"></i>Tipo de Cambio
   </a>
   {% endif %}
-
-  <div class="af-sidebar-section">Diseño</div>
-  <a href="#"
-     class="af-sidebar-link">
-    <i class="bi bi-file-earmark-text"></i>Diseño PDF
-  </a>
 
 </aside>
 {% endif %}
