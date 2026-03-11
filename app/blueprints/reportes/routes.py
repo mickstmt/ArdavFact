@@ -12,9 +12,8 @@ from app.models.comprobante import Comprobante
 from app.models.producto import CostoProducto
 from app.decorators import requiere_permiso
 from app.services.utils import extraer_skus_base
+from app.services.tipo_cambio_service import get_tipo_cambio
 from . import reportes_bp
-
-_TIPO_CAMBIO = 3.75  # USD → PEN
 
 
 def _build_mapa_costos() -> dict:
@@ -277,6 +276,7 @@ def exportar_ganancias_detallado():
     for comp in comprobantes:
         fecha_str    = comp.fecha_emision.strftime('%d/%m/%Y') if comp.fecha_emision else ''
         cliente_nom  = comp.cliente.nombre_completo if comp.cliente else '—'
+        tc_comp      = get_tipo_cambio(comp.fecha_emision) or 3.75
 
         es_nc = comp.tipo_comprobante == 'NOTA_CREDITO'
         for item in comp.items:
@@ -293,7 +293,7 @@ def exportar_ganancias_detallado():
             else:
                 skus = extraer_skus_base(sku)
                 costo_unit_usd = sum(mapa_costos.get(s, 0.0) for s in skus)
-                costo_unit_pen = round(costo_unit_usd * _TIPO_CAMBIO, 2)
+                costo_unit_pen = round(costo_unit_usd * tc_comp, 2)
                 costo_total    = round(costo_unit_pen * cantidad, 2)
                 ingreso_item   = float(item.subtotal_con_igv or 0)
             ganancia = round(ingreso_item - costo_total, 2)
@@ -422,6 +422,7 @@ def _calcular_resumen(comprobantes: list, mapa_costos: dict) -> dict:
 
 
 def _costo_comprobante(comp: Comprobante, mapa_costos: dict) -> Decimal:
+    tc = get_tipo_cambio(comp.fecha_emision) or 3.75
     total = Decimal('0')
     for item in comp.items:
         sku = (item.producto_sku or '').strip()
@@ -429,7 +430,7 @@ def _costo_comprobante(comp: Comprobante, mapa_costos: dict) -> Decimal:
             continue
         skus = extraer_skus_base(sku)
         costo_unit_usd = sum(mapa_costos.get(s, 0.0) for s in skus)
-        costo_unit_pen = Decimal(str(round(costo_unit_usd * _TIPO_CAMBIO, 4)))
+        costo_unit_pen = Decimal(str(round(costo_unit_usd * tc, 4)))
         total += costo_unit_pen * (item.cantidad or Decimal('1'))
     return total
 
@@ -467,3 +468,232 @@ def _parse_date(s: str):
         except (ValueError, TypeError):
             continue
     return None
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Registro de Ventas e Ingresos — Formato 14.1
+# ─────────────────────────────────────────────────────────────────────────────
+
+@reportes_bp.route('/registro-ventas')
+@login_required
+@requiere_permiso('reportes.ver')
+def registro_ventas():
+    """Formulario de parámetros para el Registro de Ventas e Ingresos."""
+    hoy       = date.today()
+    fecha_ini = request.args.get('fecha_ini') or hoy.replace(day=1).strftime('%Y-%m-%d')
+    fecha_fin = request.args.get('fecha_fin') or hoy.strftime('%Y-%m-%d')
+    return render_template('reportes/registro_ventas.html',
+                           fecha_ini=fecha_ini, fecha_fin=fecha_fin)
+
+
+@reportes_bp.route('/registro-ventas/exportar')
+@login_required
+@requiere_permiso('reportes.ver')
+def registro_ventas_exportar():
+    """Genera y descarga el Excel Formato 14.1."""
+    import openpyxl
+    from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+    from openpyxl.utils import get_column_letter
+
+    fecha_ini_str = request.args.get('fecha_ini', '')
+    fecha_fin_str = request.args.get('fecha_fin', '')
+
+    if not fecha_ini_str or not fecha_fin_str:
+        from flask import flash, redirect, url_for
+        flash('Debe indicar rango de fechas.', 'danger')
+        return redirect(url_for('reportes.registro_ventas'))
+
+    comprobantes = (Comprobante.query
+                    .filter(Comprobante.estado.notin_(['BORRADOR', 'RECHAZADO']),
+                            Comprobante.fecha_emision.between(
+                                f'{fecha_ini_str} 00:00:00',
+                                f'{fecha_fin_str} 23:59:59'))
+                    .order_by(Comprobante.tipo_comprobante, Comprobante.fecha_emision)
+                    .all())
+
+    def tipo_doc_sunat(comp):
+        if comp.tipo_comprobante == 'NOTA_CREDITO':
+            return '07'
+        if comp.serie and comp.serie.upper().startswith('F'):
+            return '01'
+        return '03'
+
+    ID_DOC_MAP = {'DNI': '1', 'RUC': '6', 'CE': '4', 'PAS': '7'}
+
+    def base_imp(total):
+        return round(float(total) / 1.18, 2)
+
+    def igv_val(total):
+        return round(float(total) * 18 / 118, 2)
+
+    # ── Workbook ─────────────────────────────────────────────────────────────
+    wb  = openpyxl.Workbook()
+    ws  = wb.active
+    ws.title = 'Registro de Ventas'
+
+    empresa_ruc   = current_app.config.get('EMPRESA_RUC', '')
+    empresa_razon = current_app.config.get('EMPRESA_RAZON_SOCIAL', '')
+
+    thin        = Side(style='thin')
+    border_thin = Border(left=thin, right=thin, top=thin, bottom=thin)
+    fill_header = PatternFill('solid', fgColor='1F4E79')
+    fill_subtot = PatternFill('solid', fgColor='D9E1F2')
+    fill_total  = PatternFill('solid', fgColor='BDD7EE')
+    align_c     = Alignment(horizontal='center', vertical='center', wrap_text=True)
+    align_l     = Alignment(horizontal='left',   vertical='center')
+    align_r     = Alignment(horizontal='right',  vertical='center')
+    fmt_date    = 'DD/MM/YY'
+    fmt_num     = '#,##0.00'
+    fmt_num4    = '#,##0.0000'
+
+    # Encabezado
+    ws.merge_cells('A1:V1')
+    ws['A1'] = 'Formato 14.1: Registro de Ventas e Ingresos'
+    ws['A1'].font = Font(name='Arial', bold=True, size=12)
+    ws['A1'].alignment = align_l
+
+    ws.merge_cells('A2:V2')
+    ws['A2'] = f'Rango de Fechas: {fecha_ini_str} a {fecha_fin_str}'
+    ws['A2'].font = Font(name='Arial', size=9)
+
+    ws['A3'] = 'RUC:';          ws['B3'] = empresa_ruc
+    ws['A4'] = 'Razón Social:'; ws['B4'] = empresa_razon
+    for cell in [ws['A3'], ws['A4']]:
+        cell.font = Font(name='Arial', bold=True, size=9)
+    for cell in [ws['B3'], ws['B4']]:
+        cell.font = Font(name='Arial', size=9)
+
+    HEADERS = [
+        'Nro.\nCorrelativo', 'Fecha\nEmisión', 'Fecha\nVencim.',
+        'Tipo\nDoc.', 'Serie', 'Número',
+        'T.Doc.\nIdentidad', 'N° Documento\nIdentidad', 'Nombre / Razón Social',
+        'Val. Fact.\nExportación', 'Base Imponible\nOp. Gravada',
+        'Exon.', 'Inafecto', 'ISC', 'IGV', 'Otros\nTributos',
+        'Importe\nTotal', 'Tipo\nCambio',
+        'Ref: Fecha', 'Ref: Tipo', 'Ref: Serie', 'Ref: N° Comprobante',
+    ]
+    ROW_HDR = 6
+    for ci, h in enumerate(HEADERS, 1):
+        cell = ws.cell(row=ROW_HDR, column=ci, value=h)
+        cell.font      = Font(name='Arial', bold=True, size=8, color='FFFFFF')
+        cell.fill      = fill_header
+        cell.alignment = align_c
+        cell.border    = border_thin
+    ws.row_dimensions[ROW_HDR].height = 30
+
+    col_widths = [6, 10, 10, 6, 7, 11, 8, 14, 35, 10, 12, 7, 8, 7, 10, 8, 10, 8, 10, 6, 8, 14]
+    for i, w in enumerate(col_widths, 1):
+        ws.column_dimensions[get_column_letter(i)].width = w
+
+    # ── Datos ────────────────────────────────────────────────────────────────
+    row   = ROW_HDR + 1
+    nro   = 0
+    ESTABLECIMIENTO = 'CENTRAL'
+    grupos_orden    = ['01', '03', '07']
+    grupos: dict[str, list] = {}
+    for c in comprobantes:
+        grupos.setdefault(tipo_doc_sunat(c), []).append(c)
+
+    est_base = est_igv = est_tot = 0.0
+
+    ws.cell(row=row, column=1, value=ESTABLECIMIENTO).font = Font(name='Arial', bold=True, size=8)
+    ws.row_dimensions[row].height = 14
+    row += 1
+
+    for td in grupos_orden:
+        if td not in grupos:
+            continue
+        grp_base = grp_igv = grp_tot = 0.0
+
+        for comp in grupos[td]:
+            nro += 1
+            tc      = get_tipo_cambio(comp.fecha_emision) or 0.0
+            total_v = float(comp.total or 0)
+            if comp.tipo_comprobante == 'NOTA_CREDITO':
+                total_v = -abs(total_v)
+            b = base_imp(total_v)
+            i = igv_val(total_v)
+            grp_base += b; grp_igv += i; grp_tot += total_v
+
+            ref_fecha = ref_tipo = ref_serie = ref_num = ''
+            if comp.tipo_comprobante == 'NOTA_CREDITO' and comp.comprobante_ref:
+                ref = comp.comprobante_ref
+                ref_fecha = ref.fecha_emision.date() if ref.fecha_emision else ''
+                ref_tipo  = tipo_doc_sunat(ref)
+                ref_serie = ref.serie or ''
+                ref_num   = str(ref.correlativo).zfill(8)
+
+            cli     = comp.cliente
+            id_tipo = ID_DOC_MAP.get(cli.tipo_documento, cli.tipo_documento) if cli else ''
+            id_num  = cli.numero_documento if cli else ''
+            nombre  = cli.nombre_completo  if cli else ''
+
+            valores = [
+                nro,
+                comp.fecha_emision.date() if comp.fecha_emision else '',
+                comp.fecha_emision.date() if comp.fecha_emision else '',
+                tipo_doc_sunat(comp), comp.serie,
+                str(comp.correlativo).zfill(8),
+                id_tipo, id_num, nombre, '',
+                b, '', '', '', i, '', total_v,
+                tc if tc else '',
+                ref_fecha, ref_tipo, ref_serie, ref_num,
+            ]
+            for ci, val in enumerate(valores, 1):
+                cell = ws.cell(row=row, column=ci, value=val)
+                cell.font   = Font(name='Arial', size=8)
+                cell.border = border_thin
+                cell.alignment = align_l
+                if ci in (2, 3, 19):
+                    cell.number_format = fmt_date; cell.alignment = align_c
+                elif ci in (11, 15, 17):
+                    cell.number_format = fmt_num;  cell.alignment = align_r
+                elif ci == 18:
+                    cell.number_format = fmt_num4; cell.alignment = align_r
+                elif ci in (4, 5, 6, 7, 20, 21, 22):
+                    cell.alignment = align_c
+            ws.row_dimensions[row].height = 13
+            row += 1
+
+        # Subtotal por tipo doc
+        ws.cell(row=row, column=9, value=f'Totales por {td} :').font = Font(name='Arial', bold=True, size=8)
+        for ci, val in [(11, grp_base), (15, grp_igv), (17, grp_tot)]:
+            cell = ws.cell(row=row, column=ci, value=val)
+            cell.font = Font(name='Arial', bold=True, size=8)
+            cell.fill = fill_subtot; cell.border = border_thin
+            cell.number_format = fmt_num; cell.alignment = align_r
+        ws.row_dimensions[row].height = 14
+        row += 1
+        est_base += grp_base; est_igv += grp_igv; est_tot += grp_tot
+
+    # Subtotal establecimiento
+    ws.cell(row=row, column=9, value=f'Totales por {ESTABLECIMIENTO}:').font = Font(name='Arial', bold=True, size=8)
+    for ci, val in [(11, est_base), (15, est_igv), (17, est_tot)]:
+        cell = ws.cell(row=row, column=ci, value=val)
+        cell.font = Font(name='Arial', bold=True, size=8)
+        cell.fill = fill_total; cell.border = border_thin
+        cell.number_format = fmt_num; cell.alignment = align_r
+    ws.row_dimensions[row].height = 14
+    row += 1
+
+    # Gran total
+    ws.cell(row=row, column=9, value='Totales:').font = Font(name='Arial', bold=True, size=9)
+    for ci, val in [(11, est_base), (15, est_igv), (17, est_tot)]:
+        cell = ws.cell(row=row, column=ci, value=val)
+        cell.font = Font(name='Arial', bold=True, size=9)
+        cell.fill = fill_total; cell.border = border_thin
+        cell.number_format = fmt_num; cell.alignment = align_r
+    ws.row_dimensions[row].height = 14
+
+    ws.freeze_panes = ws.cell(row=ROW_HDR + 1, column=1)
+
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=f'RegistroVentas_{fecha_ini_str}_al_{fecha_fin_str}.xlsx'
+    )

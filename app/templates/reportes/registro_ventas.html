@@ -1,0 +1,52 @@
+{% extends 'base.html' %}
+{% block title %}Registro de Ventas e Ingresos{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+  <div>
+    <h4 class="mb-0 fw-semibold">
+      <i class="bi bi-file-earmark-spreadsheet me-2 text-primary"></i>Registro de Ventas e Ingresos
+      <span class="badge bg-secondary ms-1" style="font-size:0.5em;vertical-align:middle;">Formato 14.1</span>
+    </h4>
+    <p class="text-muted mb-0 small">Genera el formato SUNAT requerido para el período seleccionado</p>
+  </div>
+</div>
+
+<div class="af-card mb-3">
+  <p class="text-muted small mb-4">
+    Incluye boletas, facturas y notas de crédito del período (excluye borradores y rechazados).
+    El tipo de cambio se toma automáticamente de los
+    <a href="{{ url_for('admin.tipo_cambio') }}">registros cargados</a>.
+  </p>
+
+  <form method="GET" action="{{ url_for('reportes.registro_ventas_exportar') }}">
+    <div class="row g-3 align-items-end">
+      <div class="col-12 col-md-4">
+        <label class="form-label small text-muted fw-semibold">Fecha Inicio</label>
+        <input type="date" name="fecha_ini" value="{{ fecha_ini }}"
+               class="form-control form-control-sm" required>
+      </div>
+      <div class="col-12 col-md-4">
+        <label class="form-label small text-muted fw-semibold">Fecha Fin</label>
+        <input type="date" name="fecha_fin" value="{{ fecha_fin }}"
+               class="form-control form-control-sm" required>
+      </div>
+      <div class="col-12 col-md-4">
+        <button type="submit" class="btn btn-primary btn-sm w-100">
+          <i class="bi bi-file-earmark-excel-fill me-1"></i>Descargar Excel
+        </button>
+      </div>
+    </div>
+  </form>
+</div>
+
+<div class="alert alert-info border-0 d-flex align-items-start gap-2 small">
+  <i class="bi bi-info-circle-fill mt-1 flex-shrink-0"></i>
+  <div>
+    <strong>Tipo de cambio:</strong> Se usa el TC registrado para la fecha de emisión de cada comprobante.
+    Si no existe registro exacto, se usa el más reciente anterior.
+    Si no hay ninguno cargado, se usará <strong>3.7500</strong> como valor de respaldo.
+    <a href="{{ url_for('admin.tipo_cambio') }}" class="alert-link ms-1">Gestionar tipos de cambio →</a>
+  </div>
+</div>
+{% endblock %}

@@ -179,6 +179,90 @@ def scheduler_ejecutar_ahora():
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Tipo de Cambio — CRUD
+# ─────────────────────────────────────────────────────────────────────────────
+
+@admin_bp.route('/tipo-cambio')
+@login_required
+@requiere_permiso('usuarios.gestionar')
+def tipo_cambio():
+    """Panel de gestión del tipo de cambio diario."""
+    from app.models.tipo_cambio import TipoCambio
+    registros = TipoCambio.query.order_by(TipoCambio.fecha.desc()).all()
+    return render_template('admin/tipo_cambio.html', registros=registros)
+
+
+@admin_bp.route('/tipo-cambio/guardar', methods=['POST'])
+@login_required
+@requiere_permiso('usuarios.gestionar')
+def tipo_cambio_guardar():
+    """Guarda o actualiza el TC para una fecha individual."""
+    from app.services.tipo_cambio_service import guardar_tipo_cambio
+    from flask import flash, redirect, url_for
+    from datetime import date
+
+    fecha_str = request.form.get('fecha', '').strip()
+    valor_str = request.form.get('valor', '').strip()
+
+    if not fecha_str or not valor_str:
+        flash('Fecha y valor son obligatorios.', 'danger')
+        return redirect(url_for('admin.tipo_cambio'))
+
+    try:
+        fecha = date.fromisoformat(fecha_str)
+        valor = float(valor_str.replace(',', '.'))
+        if valor <= 0:
+            raise ValueError
+    except ValueError:
+        flash('Fecha o valor inválidos.', 'danger')
+        return redirect(url_for('admin.tipo_cambio'))
+
+    guardar_tipo_cambio(fecha, valor)
+    flash(f'Tipo de cambio {fecha_str} = {valor:.4f} guardado.', 'success')
+    return redirect(url_for('admin.tipo_cambio'))
+
+
+@admin_bp.route('/tipo-cambio/guardar-rango', methods=['POST'])
+@login_required
+@requiere_permiso('usuarios.gestionar')
+def tipo_cambio_guardar_rango():
+    """Carga masiva: aplica el mismo TC a todos los días del rango."""
+    from app.services.tipo_cambio_service import guardar_rango
+    from flask import flash, redirect, url_for
+    from datetime import date
+
+    fecha_ini_str = request.form.get('fecha_ini', '').strip()
+    fecha_fin_str = request.form.get('fecha_fin', '').strip()
+    valor_str     = request.form.get('valor', '').strip()
+
+    try:
+        fecha_ini = date.fromisoformat(fecha_ini_str)
+        fecha_fin = date.fromisoformat(fecha_fin_str)
+        valor     = float(valor_str.replace(',', '.'))
+        if valor <= 0 or fecha_fin < fecha_ini:
+            raise ValueError
+    except ValueError:
+        flash('Datos inválidos para el rango.', 'danger')
+        return redirect(url_for('admin.tipo_cambio'))
+
+    creados, actualizados = guardar_rango(fecha_ini, fecha_fin, valor)
+    flash(f'Rango guardado: {creados} nuevos, {actualizados} actualizados.', 'success')
+    return redirect(url_for('admin.tipo_cambio'))
+
+
+@admin_bp.route('/tipo-cambio/eliminar/<int:tc_id>', methods=['POST'])
+@login_required
+@requiere_permiso('usuarios.gestionar')
+def tipo_cambio_eliminar(tc_id: int):
+    """Elimina un registro de tipo de cambio."""
+    from app.services.tipo_cambio_service import eliminar_tipo_cambio
+    from flask import flash, redirect, url_for
+    eliminar_tipo_cambio(tc_id)
+    flash('Registro eliminado.', 'success')
+    return redirect(url_for('admin.tipo_cambio'))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Helper
 # ─────────────────────────────────────────────────────────────────────────────
 

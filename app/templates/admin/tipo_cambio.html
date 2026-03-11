@@ -1,0 +1,111 @@
+{% extends 'base.html' %}
+{% block title %}Tipo de Cambio{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+  <div>
+    <h4 class="mb-0 fw-semibold"><i class="bi bi-currency-exchange me-2 text-primary"></i>Tipo de Cambio</h4>
+    <p class="text-muted mb-0 small">Gestión de tasas diarias USD → PEN para reportes contables</p>
+  </div>
+</div>
+
+<div class="row g-4 mb-4">
+
+  <!-- Carga individual -->
+  <div class="col-md-5">
+    <div class="af-card h-100">
+      <h6 class="fw-semibold mb-3"><i class="bi bi-plus-circle text-success me-1"></i>Registrar Fecha Individual</h6>
+      <form method="POST" action="{{ url_for('admin.tipo_cambio_guardar') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="mb-3">
+          <label class="form-label small text-muted fw-semibold">Fecha</label>
+          <input type="date" name="fecha" class="form-control form-control-sm" required>
+        </div>
+        <div class="mb-3">
+          <label class="form-label small text-muted fw-semibold">Tipo de Cambio (S/. por USD)</label>
+          <input type="number" name="valor" step="0.0001" min="0.0001" placeholder="3.7500"
+                 class="form-control form-control-sm" required>
+        </div>
+        <button type="submit" class="btn btn-success btn-sm w-100">
+          <i class="bi bi-floppy me-1"></i>Guardar
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Carga por rango -->
+  <div class="col-md-7">
+    <div class="af-card h-100">
+      <h6 class="fw-semibold mb-1"><i class="bi bi-calendar-range text-primary me-1"></i>Carga Masiva por Rango</h6>
+      <p class="text-muted small mb-3">Aplica el mismo TC a todos los días del rango (útil para carga mensual).</p>
+      <form method="POST" action="{{ url_for('admin.tipo_cambio_guardar_rango') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="row g-2">
+          <div class="col-6">
+            <label class="form-label small text-muted fw-semibold">Fecha Inicio</label>
+            <input type="date" name="fecha_ini" class="form-control form-control-sm" required>
+          </div>
+          <div class="col-6">
+            <label class="form-label small text-muted fw-semibold">Fecha Fin</label>
+            <input type="date" name="fecha_fin" class="form-control form-control-sm" required>
+          </div>
+          <div class="col-12">
+            <label class="form-label small text-muted fw-semibold">Tipo de Cambio</label>
+            <input type="number" name="valor" step="0.0001" min="0.0001" placeholder="3.7500"
+                   class="form-control form-control-sm" required>
+          </div>
+          <div class="col-12 mt-2">
+            <button type="submit" class="btn btn-primary btn-sm w-100">
+              <i class="bi bi-cloud-upload me-1"></i>Aplicar a todo el rango
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Tabla de registros -->
+<div class="af-card">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h6 class="fw-semibold mb-0"><i class="bi bi-table me-1"></i>Registros cargados</h6>
+    <span class="badge bg-secondary">{{ registros|length }} fechas</span>
+  </div>
+
+  {% if registros %}
+  <div class="table-responsive">
+    <table class="table table-sm align-middle mb-0">
+      <thead>
+        <tr>
+          <th>Fecha</th>
+          <th>Tipo de Cambio</th>
+          <th class="text-end">Acción</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for tc in registros %}
+        <tr>
+          <td class="fw-semibold">{{ tc.fecha.strftime('%d/%m/%Y') }}</td>
+          <td>S/. {{ '%.4f'|format(tc.valor|float) }}</td>
+          <td class="text-end">
+            <form method="POST" action="{{ url_for('admin.tipo_cambio_eliminar', tc_id=tc.id) }}"
+                  onsubmit="return confirm('¿Eliminar TC del {{ tc.fecha.strftime('%d/%m/%Y') }}?')">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn btn-sm btn-outline-danger px-2 py-0">
+                <i class="bi bi-trash"></i>
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="text-center text-muted py-5">
+    <i class="bi bi-inbox display-5 d-block mb-2"></i>
+    No hay registros de tipo de cambio aún.
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

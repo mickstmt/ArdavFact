@@ -110,16 +110,24 @@
   {% if current_user.tiene_permiso('reportes.ver') %}
   <div class="af-sidebar-section">Reportes</div>
   <a href="{{ url_for('reportes.ganancias') }}"
-     class="af-sidebar-link {% if request.blueprint == 'reportes' %}active{% endif %}">
+     class="af-sidebar-link {% if request.endpoint == 'reportes.ganancias' %}active{% endif %}">
     <i class="bi bi-graph-up-arrow"></i>Ganancias
+  </a>
+  <a href="{{ url_for('reportes.registro_ventas') }}"
+     class="af-sidebar-link {% if request.endpoint in ('reportes.registro_ventas', 'reportes.registro_ventas_exportar') %}active{% endif %}">
+    <i class="bi bi-file-earmark-spreadsheet"></i>Reg. Ventas e Ingresos
   </a>
   {% endif %}
 
   {% if current_user.tiene_permiso('usuarios.gestionar') %}
   <div class="af-sidebar-section">Administración</div>
   <a href="{{ url_for('admin.usuarios') }}"
-     class="af-sidebar-link {% if request.blueprint == 'admin' %}active{% endif %}">
+     class="af-sidebar-link {% if request.endpoint == 'admin.usuarios' %}active{% endif %}">
     <i class="bi bi-people"></i>Equipo
+  </a>
+  <a href="{{ url_for('admin.tipo_cambio') }}"
+     class="af-sidebar-link {% if request.endpoint == 'admin.tipo_cambio' %}active{% endif %}">
+    <i class="bi bi-currency-exchange"></i>Tipo de Cambio
   </a>
   {% endif %}
 

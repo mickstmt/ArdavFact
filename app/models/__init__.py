@@ -4,6 +4,7 @@ from .cliente import Cliente
 from .producto import Producto, Variacion, Categoria, CostoProducto, producto_categorias
 from .comprobante import Comprobante, ComprobanteItem
 from .plantilla import PlantillaComprobante
+from .tipo_cambio import TipoCambio
 
 __all__ = [
     'Usuario', 'Rol', 'Permiso', 'usuario_roles', 'rol_permisos',
@@ -11,4 +12,5 @@ __all__ = [
     'Producto', 'Variacion', 'Categoria', 'CostoProducto', 'producto_categorias',
     'Comprobante', 'ComprobanteItem',
     'PlantillaComprobante',
+    'TipoCambio',
 ]
