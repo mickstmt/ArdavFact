@@ -34,9 +34,18 @@
       </div>
 
       <!-- Info columnas (cambia según plataforma) -->
-      <div class="alert alert-info d-flex gap-2 align-items-start mb-4" style="font-size:0.83rem;">
+      <div class="alert alert-info d-flex gap-2 align-items-start mb-3" style="font-size:0.83rem;">
         <i class="bi bi-info-circle-fill mt-1 flex-shrink-0"></i>
         <div id="infoColumnas"><!-- se rellena por JS --></div>
+      </div>
+
+      <!-- Descargar plantilla -->
+      <div class="mb-4">
+        <a id="btnPlantilla" href="{{ url_for('bulk.descargar_plantilla', fuente='woo') }}"
+           class="btn btn-outline-success btn-sm">
+          <i class="bi bi-file-earmark-arrow-down me-1"></i>Descargar plantilla vacía
+        </a>
+        <span class="text-muted small ms-2">Completa y sube este archivo para importar.</span>
       </div>
 
       <!-- Zona drag & drop -->
@@ -124,8 +133,16 @@ function getPlataforma() {
   return document.querySelector('input[name="plataforma"]:checked')?.value || 'woo';
 }
 
+const PLANTILLA_URLS = {
+  woo:       '{{ url_for("bulk.descargar_plantilla", fuente="woo") }}',
+  falabella: '{{ url_for("bulk.descargar_plantilla", fuente="falabella") }}',
+  meli:      '{{ url_for("bulk.descargar_plantilla", fuente="meli") }}',
+};
+
 function actualizarInfoColumnas() {
-  document.getElementById('infoColumnas').innerHTML = INFO_COLUMNAS[getPlataforma()] || '';
+  const plat = getPlataforma();
+  document.getElementById('infoColumnas').innerHTML = INFO_COLUMNAS[plat] || '';
+  document.getElementById('btnPlantilla').href = PLANTILLA_URLS[plat] || '#';
 }
 
 document.querySelectorAll('input[name="plataforma"]').forEach(r => {
