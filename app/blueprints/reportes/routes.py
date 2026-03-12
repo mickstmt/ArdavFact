@@ -314,9 +314,13 @@ def exportar_ganancias_detallado():
         tc_comp      = get_tipo_cambio(comp.fecha_emision) or 3.75
 
         es_nc = comp.tipo_comprobante == 'NOTA_CREDITO'
+        envio_item = None
         for item in comp.items:
             sku = (item.producto_sku or '').strip()
-            if not sku or sku == 'ENVIO':
+            if not sku:
+                continue
+            if sku == 'ENVIO':
+                envio_item = item
                 continue
 
             cantidad = float(item.cantidad or 1)
@@ -385,6 +389,45 @@ def exportar_ganancias_detallado():
             total_ingreso  += ingreso_item
             total_costo    += costo_total
             total_ganancia += ganancia
+            n_filas += 1
+
+        # Fila ENVIO — usa el item ENVIO si existe, sino comp.costo_envio
+        envio_monto = 0.0
+        if envio_item:
+            envio_monto = float(envio_item.subtotal_con_igv or 0)
+        elif comp.costo_envio and float(comp.costo_envio) > 0:
+            envio_monto = float(comp.costo_envio)
+        if envio_monto > 0:
+            row_idx = ws.max_row + 1
+            ws.append([
+                _detectar_fuente(comp.numero_orden),
+                comp.numero_orden or '—',
+                comp.numero_completo,
+                comp.tipo_comprobante,
+                fecha_str,
+                cliente_nom,
+                'ENVIO',
+                'Costo de Envío',
+                1,
+                envio_monto,
+                envio_monto,
+                0.0, 0.0, envio_monto, 0.0, 0.0,
+            ])
+            ws.row_dimensions[row_idx].height = 17
+            for col_idx, cell in enumerate(ws[row_idx], start=1):
+                cell.border = CELL_BORDER
+                cell.fill   = PatternFill('solid', fgColor='FFFFF9C4')  # amarillo suave
+                if col_idx in (10, 11, 13, 14, 15):
+                    cell.number_format = fmt_soles
+                    cell.alignment = Alignment(horizontal='right', vertical='center')
+                elif col_idx == 16:
+                    cell.number_format = fmt_pct
+                    cell.alignment = Alignment(horizontal='right', vertical='center')
+                else:
+                    cell.alignment = Alignment(horizontal='center' if col_idx in (1,2,3,4,5,9) else 'left',
+                                               vertical='center')
+            total_ingreso += envio_monto
+            total_costo   += envio_monto
             n_filas += 1
 
     # Fila de totales
