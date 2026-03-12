@@ -151,11 +151,11 @@ def exportar_ganancias():
     ws.title = 'Detalle'
     _COLOR_HDR = 'FF1e3a5f'
 
-    # cols: 1=Fuente 2=N°Orden 3=N°SUNAT 4=Tipo 5=Fecha 6=Cliente 7=Estado
-    #       8=Base 9=IGV 10=Descuento 11=CostoEnvío 12=Total
-    #       13=CostoProductos 14=GananciaBruta 15=Margen
+    # cols: 1=Fuente 2=N°Orden 3=Serie 4=Correlativo 5=Tipo 6=Fecha 7=Cliente 8=Estado
+    #       9=Base 10=IGV 11=Descuento 12=CostoEnvío 13=Total
+    #       14=CostoProductos 15=GananciaBruta 16=Margen
     hdrs = [
-        'Fuente', 'N° Orden', 'N° SUNAT', 'Tipo', 'Fecha', 'Cliente', 'Estado',
+        'Fuente', 'N° Orden', 'Serie', 'Correlativo', 'Tipo', 'Fecha', 'Cliente', 'Estado',
         'Base Imponible', 'IGV 18%', 'Descuento', 'Costo Envío', 'Total Ingreso',
         'Costo Productos', 'Ganancia Bruta', 'Margen %',
     ]
@@ -167,10 +167,12 @@ def exportar_ganancias():
         cell.alignment = Alignment(horizontal='center')
 
     for f in filas:
+        partes = f['numero_completo'].split('-', 1)
         ws.append([
             f['fuente'],
             f['numero_orden'],
-            f['numero_completo'],
+            partes[0] if len(partes) > 0 else f['numero_completo'],
+            partes[1] if len(partes) > 1 else '',
             f['tipo_comprobante'],
             f['fecha_emision'],
             f['cliente_nombre'],
@@ -185,12 +187,12 @@ def exportar_ganancias():
             float(f['margen_pct']),
         ])
 
-    moneda_cols = {8, 9, 10, 11, 12, 13, 14}
+    moneda_cols = {9, 10, 11, 12, 13, 14, 15}
     for row in ws.iter_rows(min_row=2, max_row=ws.max_row):
         for cell in row:
             if cell.column in moneda_cols:
                 cell.number_format = '"S/ "#,##0.00'
-            elif cell.column == 15:
+            elif cell.column == 16:
                 cell.number_format = '0.00"%"'
 
     for col in ws.columns:
@@ -287,7 +289,7 @@ def exportar_ganancias_detallado():
     ws.title = 'Detallado'
 
     hdrs = [
-        'Fuente', 'N° Orden', 'N° SUNAT', 'Tipo', 'Fecha', 'Cliente',
+        'Fuente', 'N° Orden', 'Serie', 'Correlativo', 'Tipo', 'Fecha', 'Cliente',
         'SKU', 'Producto', 'Cantidad', 'Precio Unit. (S/)',
         'Ingreso Item (S/)', 'Costo Unit. USD', 'Costo Unit. (S/)',
         'Costo Total (S/)', 'Ganancia (S/)', 'Margen %',
@@ -338,11 +340,13 @@ def exportar_ganancias_detallado():
             ganancia = round(ingreso_item - costo_total, 2)
             margen   = round(ganancia / ingreso_item * 100, 2) if ingreso_item else 0.0
 
+            _partes = comp.numero_completo.split('-', 1)
             row_idx = ws.max_row + 1
             ws.append([
                 _detectar_fuente(comp.numero_orden),
                 comp.numero_orden or '—',
-                comp.numero_completo,
+                _partes[0] if len(_partes) > 0 else comp.numero_completo,
+                _partes[1] if len(_partes) > 1 else '',
                 comp.tipo_comprobante,
                 fecha_str,
                 cliente_nom,
@@ -363,26 +367,26 @@ def exportar_ganancias_detallado():
                 cell.border = CELL_BORDER
                 if is_alt:
                     cell.fill = PatternFill('solid', fgColor=_COLOR_ALT)
-                # cols: 1=Fuente 2=N°Orden 3=N°SUNAT 4=Tipo 5=Fecha 6=Cliente
-                #       7=SKU 8=Producto 9=Cantidad 10=PrecioUnit 11=IngresoItem
-                #       12=CostoUSD 13=CostoPen 14=CostoTotal 15=Ganancia 16=Margen
-                if col_idx in (1, 2, 3, 4, 5, 9):
+                # cols: 1=Fuente 2=N°Orden 3=Serie 4=Correlativo 5=Tipo 6=Fecha 7=Cliente
+                #       8=SKU 9=Producto 10=Cantidad 11=PrecioUnit 12=IngresoItem
+                #       13=CostoUSD 14=CostoPen 15=CostoTotal 16=Ganancia 17=Margen
+                if col_idx in (1, 2, 3, 4, 5, 6, 10):
                     cell.alignment = Alignment(horizontal='center', vertical='center')
-                elif col_idx in (7, 8):
+                elif col_idx in (8, 9):
                     cell.alignment = Alignment(horizontal='left', vertical='center')
-                elif col_idx == 10:
-                    cell.alignment     = Alignment(horizontal='right', vertical='center')
-                    cell.number_format = fmt_soles
                 elif col_idx == 11:
                     cell.alignment     = Alignment(horizontal='right', vertical='center')
                     cell.number_format = fmt_soles
                 elif col_idx == 12:
                     cell.alignment     = Alignment(horizontal='right', vertical='center')
+                    cell.number_format = fmt_soles
+                elif col_idx == 13:
+                    cell.alignment     = Alignment(horizontal='right', vertical='center')
                     cell.number_format = fmt_usd
-                elif col_idx in (13, 14, 15):
+                elif col_idx in (14, 15, 16):
                     cell.alignment     = Alignment(horizontal='right', vertical='center')
                     cell.number_format = fmt_soles
-                elif col_idx == 16:
+                elif col_idx == 17:
                     cell.alignment     = Alignment(horizontal='right', vertical='center')
                     cell.number_format = fmt_pct
 
@@ -399,10 +403,12 @@ def exportar_ganancias_detallado():
             envio_monto = float(comp.costo_envio)
         if envio_monto > 0:
             row_idx = ws.max_row + 1
+            _ep = comp.numero_completo.split('-', 1)
             ws.append([
                 _detectar_fuente(comp.numero_orden),
                 comp.numero_orden or '—',
-                comp.numero_completo,
+                _ep[0] if len(_ep) > 0 else comp.numero_completo,
+                _ep[1] if len(_ep) > 1 else '',
                 comp.tipo_comprobante,
                 fecha_str,
                 cliente_nom,
@@ -417,14 +423,14 @@ def exportar_ganancias_detallado():
             for col_idx, cell in enumerate(ws[row_idx], start=1):
                 cell.border = CELL_BORDER
                 cell.fill   = PatternFill('solid', fgColor='FFFFF9C4')  # amarillo suave
-                if col_idx in (10, 11, 13, 14, 15):
+                if col_idx in (11, 12, 14, 15, 16):
                     cell.number_format = fmt_soles
                     cell.alignment = Alignment(horizontal='right', vertical='center')
-                elif col_idx == 16:
+                elif col_idx == 17:
                     cell.number_format = fmt_pct
                     cell.alignment = Alignment(horizontal='right', vertical='center')
                 else:
-                    cell.alignment = Alignment(horizontal='center' if col_idx in (1,2,3,4,5,9) else 'left',
+                    cell.alignment = Alignment(horizontal='center' if col_idx in (1,2,3,4,5,6,10) else 'left',
                                                vertical='center')
             total_ingreso += envio_monto
             total_costo   += envio_monto
@@ -433,10 +439,10 @@ def exportar_ganancias_detallado():
     # Fila de totales
     total_row = ws.max_row + 1
     ws.row_dimensions[total_row].height = 22
-    # cols: 1=Fuente 2=N°Orden 3=N°SUNAT 4=Tipo 5=Fecha 6=Cliente 7=SKU 8=Producto
-    #       9=Cantidad 10=PrecioUnit 11=IngresoItem 12=CostoUSD 13=CostoPen
-    #       14=CostoTotal 15=Ganancia 16=Margen
-    totales = ['TOTAL', '', '', f'{n_filas} ítems', '', '', '', '', '',
+    # cols: 1=Fuente 2=N°Orden 3=Serie 4=Correlativo 5=Tipo 6=Fecha 7=Cliente 8=SKU 9=Producto
+    #       10=Cantidad 11=PrecioUnit 12=IngresoItem 13=CostoUSD 14=CostoPen
+    #       15=CostoTotal 16=Ganancia 17=Margen
+    totales = ['TOTAL', '', '', '', f'{n_filas} ítems', '', '', '', '', '',
                '', round(total_ingreso, 2), '', '', round(total_costo, 2),
                round(total_ganancia, 2),
                round(total_ganancia / total_ingreso * 100, 2) if total_ingreso else 0]
@@ -445,15 +451,15 @@ def exportar_ganancias_detallado():
         cell.font   = Font(bold=True, size=11)
         cell.fill   = PatternFill('solid', fgColor=_COLOR_TOT)
         cell.border = CELL_BORDER
-        cell.alignment = Alignment(horizontal='center' if col_idx <= 5 else 'right',
+        cell.alignment = Alignment(horizontal='center' if col_idx <= 6 else 'right',
                                    vertical='center')
-        if col_idx in (11, 14, 15):
+        if col_idx in (12, 15, 16):
             cell.number_format = fmt_soles
-        elif col_idx == 16:
+        elif col_idx == 17:
             cell.number_format = fmt_pct
 
-    # Anchos de columna: Fuente, N°Orden, N°SUNAT, Tipo, Fecha, Cliente, SKU, Producto, ...
-    col_widths = [12, 20, 18, 10, 12, 24, 16, 34, 10, 16, 16, 14, 14, 14, 14, 12]
+    # Anchos: Fuente, N°Orden, Serie, Correlativo, Tipo, Fecha, Cliente, SKU, Producto, ...
+    col_widths = [12, 20, 10, 12, 10, 12, 24, 16, 34, 10, 16, 16, 14, 14, 14, 14, 12]
     for i, w in enumerate(col_widths, start=1):
         ws.column_dimensions[get_column_letter(i)].width = w
 
