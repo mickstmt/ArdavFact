@@ -193,7 +193,7 @@
       {% if p %}
         <li class="page-item {{ 'active' if p == comprobantes.page }}">
           <a class="page-link"
-             href="{{ url_for('reportes.ganancias', page=p, fecha_ini=fecha_ini, fecha_fin=fecha_fin, tipo=tipo_filtro) }}">
+             href="{{ url_for('reportes.ganancias', page=p, fecha_ini=fecha_ini, fecha_fin=fecha_fin, tipo=tipo_filtro, fuente=fuente_filtro) }}">
             {{ p }}
           </a>
         </li>
