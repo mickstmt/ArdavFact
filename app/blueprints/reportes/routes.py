@@ -125,9 +125,12 @@ def exportar_ganancias():
     ws.title = 'Detalle'
     _COLOR_HDR = 'FF1e3a5f'
 
+    # cols: 1=Fuente 2=N°Orden 3=N°SUNAT 4=Tipo 5=Fecha 6=Cliente 7=Estado
+    #       8=Base 9=IGV 10=Descuento 11=CostoEnvío 12=Total
+    #       13=CostoProductos 14=GananciaBruta 15=Margen
     hdrs = [
         'Fuente', 'N° Orden', 'N° SUNAT', 'Tipo', 'Fecha', 'Cliente', 'Estado',
-        'Base Imponible', 'IGV 18%', 'Costo Envío', 'Total Ingreso',
+        'Base Imponible', 'IGV 18%', 'Descuento', 'Costo Envío', 'Total Ingreso',
         'Costo Productos', 'Ganancia Bruta', 'Margen %',
     ]
     ws.append(hdrs)
@@ -148,6 +151,7 @@ def exportar_ganancias():
             f['estado'],
             float(f['base_imponible']),
             float(f['total_igv']),
+            float(f['descuento']),
             float(f['costo_envio']),
             float(f['total']),
             float(f['costo_productos']),
@@ -155,12 +159,12 @@ def exportar_ganancias():
             float(f['margen_pct']),
         ])
 
-    moneda_cols = {8, 9, 10, 11, 12, 13}
+    moneda_cols = {8, 9, 10, 11, 12, 13, 14}
     for row in ws.iter_rows(min_row=2, max_row=ws.max_row):
         for cell in row:
             if cell.column in moneda_cols:
                 cell.number_format = '"S/ "#,##0.00'
-            elif cell.column == 14:
+            elif cell.column == 15:
                 cell.number_format = '0.00"%"'
 
     for col in ws.columns:
@@ -460,6 +464,7 @@ def _enriquecer_fila(comp: Comprobante, mapa_costos: dict) -> dict:
     costo_prods   = _costo_comprobante(comp, mapa_costos)
     total         = comp.total or Decimal('0')
     costo_envio   = comp.costo_envio or Decimal('0')
+    descuento     = comp.descuento or Decimal('0')
     ganancia      = total - costo_prods - costo_envio
     margen_pct    = round(float(ganancia / total * 100), 1) if total > 0 else 0
 
@@ -474,6 +479,7 @@ def _enriquecer_fila(comp: Comprobante, mapa_costos: dict) -> dict:
         'estado':          comp.estado,
         'base_imponible':  comp.total_operaciones_gravadas or Decimal('0'),
         'total_igv':       comp.total_igv or Decimal('0'),
+        'descuento':       descuento,
         'costo_envio':     costo_envio,
         'total':           total,
         'costo_productos': costo_prods,

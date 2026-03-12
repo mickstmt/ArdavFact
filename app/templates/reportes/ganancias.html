@@ -110,6 +110,7 @@
         <th>Cliente</th>
         <th class="text-end">Base</th>
         <th class="text-end">IGV</th>
+        <th class="text-end">Descuento</th>
         <th class="text-end">Envío</th>
         <th class="text-end">Total</th>
         <th class="text-end">Costo Prod.</th>
@@ -149,6 +150,7 @@
         </td>
         <td class="text-end small">S/ {{ '%.2f'|format(f.base_imponible|float) }}</td>
         <td class="text-end small text-warning">S/ {{ '%.2f'|format(f.total_igv|float) }}</td>
+        <td class="text-end small text-success">S/ {{ '%.2f'|format(f.descuento|float) }}</td>
         <td class="text-end small text-muted">S/ {{ '%.2f'|format(f.costo_envio|float) }}</td>
         <td class="text-end fw-semibold">S/ {{ '%.2f'|format(f.total|float) }}</td>
         <td class="text-end small text-danger">S/ {{ '%.2f'|format(f.costo_productos|float) }}</td>
@@ -163,7 +165,7 @@
       </tr>
       {% else %}
       <tr>
-        <td colspan="13" class="text-center text-muted py-5">
+        <td colspan="14" class="text-center text-muted py-5">
           <i class="bi bi-bar-chart" style="font-size:2rem;opacity:.3;display:block;"></i>
           Sin comprobantes en el período seleccionado.
         </td>
