@@ -1,6 +1,9 @@
 """Rutas de carga masiva desde Excel (WooCommerce, Falabella, MercadoLibre)."""
+import io
 import os
 import uuid
+import base64
+from datetime import datetime
 
 from flask import (
     render_template, request, jsonify, current_app,
@@ -137,3 +140,125 @@ def procesar():
         'exitosos': exitosos,
         'fallidos': fallidos,
     })
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Descargar errores
+# ─────────────────────────────────────────────────────────────────────────────
+
+@bulk_bp.route('/descargar-errores', methods=['POST'])
+@login_required
+@requiere_permiso('ventas.crear')
+def descargar_errores():
+    """Genera Excel con órdenes en ERROR o WARNING para corrección y re-carga."""
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+
+    payload = request.get_json(force=True) or {}
+    ordenes = payload.get('ordenes', [])
+    fuente  = payload.get('fuente', 'woo')
+
+    if not ordenes:
+        return jsonify({'success': False, 'message': 'Sin datos para exportar.'}), 400
+
+    _FUENTE_NOMBRE = {'woo': 'WooCommerce', 'meli': 'MercadoLibre', 'falabella': 'Falabella'}
+    fuente_nombre = _FUENTE_NOMBRE.get(fuente, fuente.capitalize())
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = 'Errores'
+
+    HDR_FILL  = PatternFill('solid', fgColor='FF1e3a5f')
+    ERR_FILL  = PatternFill('solid', fgColor='FFF8D7DA')
+    WARN_FILL = PatternFill('solid', fgColor='FFFFF3CD')
+    THIN      = Side(style='thin', color='CCCCCC')
+    BORDER    = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
+
+    hdrs = [
+        'Fuente', 'N° Orden', 'Fecha', 'Nombre Cliente', 'N° Documento',
+        'SKU', 'Descripción', 'Cantidad', 'Precio Unit. (S/)', 'Costo Envío (S/)',
+        'Tipo', 'Detalle del error / advertencia',
+    ]
+    ws.append(hdrs)
+    for col_idx in range(1, len(hdrs) + 1):
+        cell = ws.cell(row=1, column=col_idx)
+        cell.font      = Font(bold=True, color='FFFFFFFF', size=10)
+        cell.fill      = HDR_FILL
+        cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+        cell.border    = BORDER
+    ws.row_dimensions[1].height = 28
+
+    col_widths = [14, 22, 12, 28, 16, 18, 36, 10, 16, 16, 12, 50]
+    for i, w in enumerate(col_widths, start=1):
+        ws.column_dimensions[openpyxl.utils.get_column_letter(i)].width = w
+
+    for orden in ordenes:
+        num_orden    = orden.get('numero_orden', '')
+        fecha_str    = orden.get('fecha_emision', '')
+        if fecha_str and 'T' in fecha_str:
+            fecha_str = fecha_str[:10]
+        nombre       = orden.get('nombre_cliente', '')
+        num_doc      = orden.get('numero_documento', '')
+        costo_envio  = float(orden.get('costo_envio', 0) or 0)
+        errores_ord  = orden.get('errores', [])
+        advertencias = orden.get('advertencias', [])
+        items        = orden.get('items', [])
+        status       = orden.get('status', 'ERROR')
+        row_fill     = ERR_FILL if status == 'ERROR' else WARN_FILL
+
+        if not items:
+            # Orden sin ítems — fila única con el error de la orden
+            tipo_msg  = status
+            detalle   = ' | '.join(errores_ord + advertencias) or '—'
+            ws.append([fuente_nombre, num_orden, fecha_str, nombre, num_doc,
+                       '—', '—', '', '', costo_envio, tipo_msg, detalle])
+            for cell in ws[ws.max_row]:
+                cell.fill   = row_fill
+                cell.border = BORDER
+                cell.alignment = Alignment(vertical='center', wrap_text=True)
+            ws.row_dimensions[ws.max_row].height = 18
+        else:
+            for item in items:
+                item_error = item.get('error')
+                if item_error:
+                    tipo_msg = 'Error ítem'
+                    detalle  = item_error
+                    fill     = ERR_FILL
+                elif errores_ord or advertencias:
+                    tipo_msg = 'Advertencia' if status == 'WARNING' else status
+                    detalle  = ' | '.join(errores_ord + advertencias)
+                    fill     = row_fill
+                else:
+                    continue  # ítem OK en una orden OK no debería llegar aquí
+
+                ws.append([
+                    fuente_nombre,
+                    num_orden,
+                    fecha_str,
+                    nombre,
+                    num_doc,
+                    item.get('sku', ''),
+                    item.get('descripcion', ''),
+                    float(item.get('cantidad', 1) or 1),
+                    float(item.get('precio_con_igv', 0) or 0),
+                    costo_envio,
+                    tipo_msg,
+                    detalle,
+                ])
+                for cell in ws[ws.max_row]:
+                    cell.fill   = fill
+                    cell.border = BORDER
+                    cell.alignment = Alignment(vertical='center', wrap_text=True)
+                ws.row_dimensions[ws.max_row].height = 18
+                # costo_envio sólo en primera fila de la orden
+                costo_envio = ''
+
+    ws.freeze_panes = 'A2'
+
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+    b64 = base64.b64encode(output.read()).decode('utf-8')
+    nombre_archivo = f'errores_{fuente}_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+
+    return jsonify({'success': True, 'filename': nombre_archivo, 'filedata': b64})

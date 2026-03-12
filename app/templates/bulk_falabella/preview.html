@@ -11,6 +11,9 @@
     <a href="{{ url_for('bulk_falabella.upload') }}" class="btn btn-outline-secondary btn-sm">
       <i class="bi bi-arrow-left me-1"></i>Cargar otro archivo
     </a>
+    <button id="btnDescargarErrores" class="btn btn-outline-danger btn-sm d-none" onclick="descargarErrores()">
+      <i class="bi bi-file-earmark-excel me-1"></i>Descargar errores
+    </button>
     <button id="btnProcesar" class="btn btn-success btn-sm" onclick="procesarOrdenes()">
       <i class="bi bi-send-fill me-1"></i>Procesar seleccionadas
     </button>
@@ -182,6 +185,7 @@
 
     renderTabla(todasLasOrdenes);
     actualizarTotalSeleccionado();
+    actualizarBtnErrores(todasLasOrdenes);
   });
 
   function renderTabla(ordenes) {
@@ -400,6 +404,45 @@
     sessionStorage.removeItem('bulk_fal_resumen');
 
     new bootstrap.Modal(document.getElementById('modalResultados')).show();
+  }
+
+  function actualizarBtnErrores(ordenes) {
+    const hayProblemas = ordenes.some(o => o.status === 'ERROR' || o.status === 'WARNING');
+    document.getElementById('btnDescargarErrores').classList.toggle('d-none', !hayProblemas);
+  }
+
+  async function descargarErrores() {
+    const ordenes = todasLasOrdenes.filter(o => o.status === 'ERROR' || o.status === 'WARNING');
+    if (!ordenes.length) return;
+
+    const btn = document.getElementById('btnDescargarErrores');
+    const html = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Generando...';
+
+    try {
+      const resp = await fetch('{{ url_for("bulk_falabella.descargar_errores") }}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
+        body: JSON.stringify({ ordenes, fuente: 'falabella' }),
+      });
+      const data = await resp.json();
+      if (data.success) {
+        const link = document.createElement('a');
+        link.href = 'data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,' + data.filedata;
+        link.download = data.filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      } else {
+        Swal.fire('Error', data.message || 'No se pudo generar el archivo.', 'error');
+      }
+    } catch {
+      Swal.fire('Error', 'Fallo al conectar con el servidor.', 'error');
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = html;
+    }
   }
 </script>
 {% endblock extra_js %}

@@ -10,6 +10,7 @@ from flask_login import login_required, current_user
 from app.decorators import requiere_permiso
 from app.services import bulk_falabella_service
 from app.services.bulk_service import procesar_ordenes
+from app.blueprints.bulk.routes import descargar_errores as _descargar_errores_shared
 from . import bulk_falabella_bp
 
 _ALLOWED_EXT = {'xlsx', 'xls'}
@@ -109,3 +110,11 @@ def procesar():
         'exitosos':   exitosos,
         'fallidos':   fallidos,
     })
+
+
+@bulk_falabella_bp.route('/descargar-errores', methods=['POST'])
+@login_required
+@requiere_permiso('ventas.crear')
+def descargar_errores():
+    """Delega al handler compartido forzando fuente=falabella."""
+    return _descargar_errores_shared()
