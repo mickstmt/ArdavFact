@@ -126,7 +126,7 @@ def exportar_ganancias():
     _COLOR_HDR = 'FF1e3a5f'
 
     hdrs = [
-        'N° Comprobante', 'Tipo', 'Fecha', 'Cliente', 'Estado',
+        'Fuente', 'N° Orden', 'N° SUNAT', 'Tipo', 'Fecha', 'Cliente', 'Estado',
         'Base Imponible', 'IGV 18%', 'Costo Envío', 'Total Ingreso',
         'Costo Productos', 'Ganancia Bruta', 'Margen %',
     ]
@@ -139,6 +139,8 @@ def exportar_ganancias():
 
     for f in filas:
         ws.append([
+            f['fuente'],
+            f['numero_orden'],
             f['numero_completo'],
             f['tipo_comprobante'],
             f['fecha_emision'],
@@ -153,12 +155,12 @@ def exportar_ganancias():
             float(f['margen_pct']),
         ])
 
-    moneda_cols = {6, 7, 8, 9, 10, 11}
+    moneda_cols = {8, 9, 10, 11, 12, 13}
     for row in ws.iter_rows(min_row=2, max_row=ws.max_row):
         for cell in row:
             if cell.column in moneda_cols:
                 cell.number_format = '"S/ "#,##0.00'
-            elif cell.column == 12:
+            elif cell.column == 14:
                 cell.number_format = '0.00"%"'
 
     for col in ws.columns:
@@ -435,6 +437,17 @@ def _costo_comprobante(comp: Comprobante, mapa_costos: dict) -> Decimal:
     return total
 
 
+def _detectar_fuente(numero_orden: str | None) -> str:
+    if not numero_orden:
+        return 'Manual'
+    n = str(numero_orden).strip()
+    if n.startswith('2') and len(n) >= 14:
+        return 'MercadoLibre'
+    if n.startswith('3') and len(n) >= 10:
+        return 'Falabella'
+    return 'WooCommerce'
+
+
 def _enriquecer_fila(comp: Comprobante, mapa_costos: dict) -> dict:
     costo_prods   = _costo_comprobante(comp, mapa_costos)
     total         = comp.total or Decimal('0')
@@ -445,6 +458,8 @@ def _enriquecer_fila(comp: Comprobante, mapa_costos: dict) -> dict:
     return {
         'id':              comp.id,
         'numero_completo': comp.numero_completo,
+        'numero_orden':    comp.numero_orden or '—',
+        'fuente':          _detectar_fuente(comp.numero_orden),
         'tipo_comprobante': comp.tipo_comprobante,
         'fecha_emision':   comp.fecha_emision.strftime('%d/%m/%Y') if comp.fecha_emision else '',
         'cliente_nombre':  comp.cliente.nombre_completo if comp.cliente else '—',

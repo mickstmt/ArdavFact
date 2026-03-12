@@ -102,7 +102,9 @@
   <table class="table table-sm align-middle mb-0">
     <thead>
       <tr>
-        <th>Comprobante</th>
+        <th>Fuente</th>
+        <th>N° Orden</th>
+        <th>N° SUNAT</th>
         <th>Tipo</th>
         <th>Fecha</th>
         <th>Cliente</th>
@@ -118,6 +120,18 @@
     <tbody>
       {% for f in filas %}
       <tr>
+        <td>
+          {% if f.fuente == 'MercadoLibre' %}
+            <span class="badge" style="background:#FFE600;color:#333;">ML</span>
+          {% elif f.fuente == 'Falabella' %}
+            <span class="badge" style="background:#F97316;color:#fff;">Falabella</span>
+          {% elif f.fuente == 'WooCommerce' %}
+            <span class="badge bg-primary">Woo</span>
+          {% else %}
+            <span class="badge bg-secondary">Manual</span>
+          {% endif %}
+        </td>
+        <td class="small text-muted">{{ f.numero_orden }}</td>
         <td>
           <a href="{{ url_for('ventas.detalle_venta', comp_id=f.id) }}"
              class="fw-semibold text-decoration-none small">{{ f.numero_completo }}</a>
@@ -149,7 +163,7 @@
       </tr>
       {% else %}
       <tr>
-        <td colspan="11" class="text-center text-muted py-5">
+        <td colspan="13" class="text-center text-muted py-5">
           <i class="bi bi-bar-chart" style="font-size:2rem;opacity:.3;display:block;"></i>
           Sin comprobantes en el período seleccionado.
         </td>
