@@ -108,6 +108,13 @@
   </a>
   {% endif %}
 
+  {% if current_user.tiene_permiso('ventas.crear') %}
+  <a href="{{ url_for('historico.upload') }}"
+     class="af-sidebar-link {% if request.blueprint == 'historico' %}active{% endif %}">
+    <i class="bi bi-clock-history"></i>Importar Histórico
+  </a>
+  {% endif %}
+
   {% if current_user.tiene_permiso('usuarios.gestionar') %}
   <a href="{{ url_for('productos.lista_productos') }}"
      class="af-sidebar-link {% if request.blueprint == 'productos' %}active{% endif %}">

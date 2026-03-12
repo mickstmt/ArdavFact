@@ -1,0 +1,294 @@
+{% extends 'base.html' %}
+{% block title %}Preview — Histórico{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+  <div>
+    <h4 class="mb-0 fw-semibold">Vista Previa — Importación Histórica</h4>
+    <p class="text-muted mb-0 small">Revisa los comprobantes antes de confirmar. Solo se importan los que no tienen errores.</p>
+  </div>
+  <div class="d-flex gap-2">
+    <a href="{{ url_for('historico.upload') }}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-arrow-left me-1"></i>Cargar otro archivo
+    </a>
+    <button id="btnConfirmar" class="btn btn-warning btn-sm fw-semibold" onclick="confirmarImportacion()">
+      <i class="bi bi-cloud-check me-1"></i>Confirmar importación
+    </button>
+  </div>
+</div>
+
+<!-- Resumen -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="af-card p-3 text-center">
+      <div class="fs-4 fw-bold" id="resTotal">—</div>
+      <div class="small text-muted">Total órdenes</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="af-card p-3 text-center">
+      <div class="fs-4 fw-bold text-success" id="resOK">—</div>
+      <div class="small text-muted">Sin errores</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="af-card p-3 text-center">
+      <div class="fs-4 fw-bold text-warning" id="resWarning">—</div>
+      <div class="small text-muted">Advertencias</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="af-card p-3 text-center">
+      <div class="fs-4 fw-bold text-danger" id="resError">—</div>
+      <div class="small text-muted">Errores</div>
+    </div>
+  </div>
+</div>
+
+<!-- Progreso -->
+<div id="progressWrapper" class="d-none mb-3">
+  <div class="d-flex justify-content-between small text-muted mb-1">
+    <span>Importando…</span>
+    <span id="progressPct">0%</span>
+  </div>
+  <div class="progress" style="height:8px;">
+    <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-warning"
+         style="width:0%"></div>
+  </div>
+</div>
+
+<!-- Tabla -->
+<div class="af-card overflow-auto">
+  <table class="table table-sm align-middle mb-0" style="font-size:0.85rem;">
+    <thead>
+      <tr>
+        <th style="width:32px;"><input type="checkbox" id="chkAll" class="form-check-input" onchange="toggleAll(this.checked)"></th>
+        <th>N° Orden</th>
+        <th>Tipo</th>
+        <th>Serie orig.</th>
+        <th>Fecha</th>
+        <th>Cliente / Doc.</th>
+        <th class="text-end">Total</th>
+        <th>Estado</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody id="tbodyOrdenes"></tbody>
+  </table>
+</div>
+
+<!-- Modal detalle -->
+<div class="modal fade" id="modalDetalle" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Detalle de la orden</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="modalDetalleBody"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal resultado -->
+<div class="modal fade" id="modalResultado" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header bg-success text-white" id="modalResultadoHeader">
+        <h5 class="modal-title" id="modalResultadoTitulo">Importación completada</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="modalResultadoBody"></div>
+      <div class="modal-footer">
+        <a href="{{ url_for('historico.upload') }}" class="btn btn-outline-secondary btn-sm">Importar otro archivo</a>
+        <a href="{{ url_for('ventas.lista_ventas') }}" class="btn btn-primary btn-sm">Ver comprobantes</a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let todasLasOrdenes = [];
+
+document.addEventListener('DOMContentLoaded', () => {
+  const raw = sessionStorage.getItem('hist_ordenes');
+  const res = sessionStorage.getItem('hist_resumen');
+  if (!raw) {
+    document.getElementById('tbodyOrdenes').innerHTML =
+      '<tr><td colspan="9" class="text-center text-danger py-4">Sin datos. <a href="{{ url_for("historico.upload") }}">Cargar archivo</a></td></tr>';
+    return;
+  }
+  todasLasOrdenes = JSON.parse(raw);
+  const resumen   = res ? JSON.parse(res) : {};
+  document.getElementById('resTotal').textContent   = resumen.total   ?? todasLasOrdenes.length;
+  document.getElementById('resOK').textContent      = resumen.ok      ?? '';
+  document.getElementById('resWarning').textContent = resumen.warning ?? '';
+  document.getElementById('resError').textContent   = resumen.error   ?? '';
+  renderTabla(todasLasOrdenes);
+  actualizarBoton();
+});
+
+function renderTabla(ordenes) {
+  const tbody = document.getElementById('tbodyOrdenes');
+  if (!ordenes.length) {
+    tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-4">Sin órdenes.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = ordenes.map((o, i) => {
+    const disabled  = o.status === 'ERROR' ? 'disabled' : '';
+    const checked   = o.status !== 'ERROR' ? 'checked'  : '';
+    const badge     = { OK: 'bg-success', WARNING: 'bg-warning text-dark', ERROR: 'bg-danger' }[o.status] || 'bg-secondary';
+    const tipoBadge = o.tipo_comprobante === 'FACTURA'
+      ? '<span class="badge bg-primary">Factura</span>'
+      : o.tipo_comprobante === 'NOTA_CREDITO'
+        ? '<span class="badge bg-info text-dark">NC</span>'
+        : '<span class="badge bg-secondary">Boleta</span>';
+    const msgs = [...(o.errores || []), ...(o.advertencias || [])].slice(0, 2).join(' / ');
+    return `<tr>
+      <td><input type="checkbox" class="form-check-input chk-orden" value="${i}" ${checked} ${disabled} onchange="actualizarBoton()"></td>
+      <td class="fw-semibold small">${o.numero_orden}</td>
+      <td>${tipoBadge}</td>
+      <td class="small text-muted">${o.serie_original || ''}</td>
+      <td class="small">${o.fecha_emision || ''}</td>
+      <td class="small">
+        <div class="fw-semibold text-truncate" style="max-width:180px;" title="${o.nombre_cliente}">${o.nombre_cliente}</div>
+        <div class="text-muted">${o.tipo_doc} ${o.num_doc}</div>
+      </td>
+      <td class="text-end fw-semibold small">S/ ${parseFloat(o.total || 0).toFixed(2)}</td>
+      <td>
+        <span class="badge ${badge}">${o.status}</span>
+        ${msgs ? `<div class="text-danger small mt-1" style="font-size:0.75rem;">${msgs}</div>` : ''}
+      </td>
+      <td>
+        <button class="btn btn-outline-secondary btn-sm py-0 px-2" onclick="verDetalle(${i})">
+          <i class="bi bi-eye"></i>
+        </button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function toggleAll(checked) {
+  document.querySelectorAll('.chk-orden:not(:disabled)').forEach(c => c.checked = checked);
+  actualizarBoton();
+}
+
+function actualizarBoton() {
+  const sel = document.querySelectorAll('.chk-orden:checked').length;
+  const btn = document.getElementById('btnConfirmar');
+  btn.disabled = sel === 0;
+  btn.textContent = sel > 0 ? `Confirmar importación (${sel})` : 'Confirmar importación';
+  if (sel > 0) {
+    btn.innerHTML = `<i class="bi bi-cloud-check me-1"></i>Confirmar importación (${sel})`;
+  }
+}
+
+function verDetalle(idx) {
+  const o = todasLasOrdenes[idx];
+  const itemsHtml = (o.items || []).map(it => `
+    <tr class="${it.error ? 'table-danger' : ''}">
+      <td class="small">${it.sku || '—'}</td>
+      <td class="small">${it.nombre_producto}</td>
+      <td class="text-end small">${parseFloat(it.cantidad).toFixed(2)}</td>
+      <td class="text-end small">S/ ${parseFloat(it.precio_unitario_con_igv).toFixed(2)}</td>
+      <td class="text-end small">S/ ${parseFloat(it.subtotal_con_igv).toFixed(2)}</td>
+      <td>${it.error ? `<span class="text-danger small">${it.error}</span>` : '<i class="bi bi-check-circle-fill text-success"></i>'}</td>
+    </tr>`).join('');
+
+  const errHtml = [...(o.errores || []).map(e => `<li class="text-danger">${e}</li>`),
+                   ...(o.advertencias || []).map(e => `<li class="text-warning">${e}</li>`)].join('');
+
+  document.getElementById('modalDetalleBody').innerHTML = `
+    <dl class="row small mb-3">
+      <dt class="col-sm-4">N° Orden</dt><dd class="col-sm-8">${o.numero_orden}</dd>
+      <dt class="col-sm-4">Tipo</dt><dd class="col-sm-8">${o.tipo_comprobante}</dd>
+      <dt class="col-sm-4">Serie original</dt><dd class="col-sm-8">${o.serie_original || '—'}</dd>
+      <dt class="col-sm-4">Fecha emisión</dt><dd class="col-sm-8">${o.fecha_emision || '—'}</dd>
+      <dt class="col-sm-4">Cliente</dt><dd class="col-sm-8">${o.nombre_cliente} (${o.tipo_doc} ${o.num_doc})</dd>
+      <dt class="col-sm-4">Costo envío</dt><dd class="col-sm-8">S/ ${parseFloat(o.costo_envio || 0).toFixed(2)}</dd>
+      <dt class="col-sm-4">Total</dt><dd class="col-sm-8 fw-bold">S/ ${parseFloat(o.total || 0).toFixed(2)}</dd>
+    </dl>
+    <table class="table table-sm mb-3">
+      <thead><tr><th>SKU</th><th>Producto</th><th class="text-end">Cant.</th><th class="text-end">Precio</th><th class="text-end">Subtotal</th><th></th></tr></thead>
+      <tbody>${itemsHtml}</tbody>
+    </table>
+    ${errHtml ? `<ul class="mb-0 small">${errHtml}</ul>` : ''}`;
+
+  new bootstrap.Modal(document.getElementById('modalDetalle')).show();
+}
+
+async function confirmarImportacion() {
+  const seleccionados = [...document.querySelectorAll('.chk-orden:checked')]
+    .map(c => todasLasOrdenes[parseInt(c.value)])
+    .filter(o => o.status !== 'ERROR');
+
+  if (!seleccionados.length) return;
+
+  const ok = await Swal.fire({
+    title: '¿Confirmar importación?',
+    html: `Se crearán <strong>${seleccionados.length}</strong> comprobante(s) histórico(s).<br>
+           <span class="text-muted small">No se enviarán a SUNAT. Estado: HISTORICO</span>`,
+    icon: 'question',
+    showCancelButton: true,
+    confirmButtonText: 'Sí, importar',
+    cancelButtonText:  'Cancelar',
+    confirmButtonColor: '#f59e0b',
+  });
+  if (!ok.isConfirmed) return;
+
+  // Progreso
+  document.getElementById('progressWrapper').classList.remove('d-none');
+  document.getElementById('btnConfirmar').disabled = true;
+  let pct = 5;
+  const timer = setInterval(() => {
+    pct = Math.min(pct + 3, 85);
+    document.getElementById('progressBar').style.width = pct + '%';
+    document.getElementById('progressPct').textContent = pct + '%';
+  }, 300);
+
+  try {
+    const resp = await fetch('{{ url_for("historico.procesar") }}', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
+      body: JSON.stringify({ ordenes: seleccionados }),
+    });
+    const data = await resp.json();
+
+    clearInterval(timer);
+    document.getElementById('progressBar').style.width = '100%';
+    document.getElementById('progressPct').textContent = '100%';
+
+    if (!data.success) {
+      Swal.fire('Error', data.message, 'error');
+      return;
+    }
+
+    const header = document.getElementById('modalResultadoHeader');
+    const titulo = document.getElementById('modalResultadoTitulo');
+    if (data.errores > 0) {
+      header.className = 'modal-header bg-warning text-dark';
+      titulo.textContent = 'Importación con advertencias';
+    } else {
+      header.className = 'modal-header bg-success text-white';
+      titulo.textContent = 'Importación completada';
+    }
+    document.getElementById('modalResultadoBody').innerHTML = `
+      <p class="mb-1"><strong>${data.creados}</strong> comprobante(s) creado(s) correctamente.</p>
+      ${data.errores ? `<p class="text-danger mb-0"><strong>${data.errores}</strong> con error (revisar logs).</p>` : ''}`;
+
+    sessionStorage.removeItem('hist_ordenes');
+    sessionStorage.removeItem('hist_resumen');
+    new bootstrap.Modal(document.getElementById('modalResultado')).show();
+
+  } catch {
+    clearInterval(timer);
+    Swal.fire('Error', 'Fallo al conectar con el servidor.', 'error');
+  } finally {
+    document.getElementById('btnConfirmar').disabled = false;
+    setTimeout(() => document.getElementById('progressWrapper').classList.add('d-none'), 1500);
+  }
+}
+</script>
+{% endblock extra_js %}

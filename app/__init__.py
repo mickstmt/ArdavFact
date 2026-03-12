@@ -81,6 +81,7 @@ def _register_blueprints(app: Flask) -> None:
     from .blueprints.notas import notas_bp
     from .blueprints.bulk import bulk_bp
     from .blueprints.bulk_falabella import bulk_falabella_bp
+    from .blueprints.historico import historico_bp
     from .blueprints.productos import productos_bp
     from .blueprints.reportes import reportes_bp
     from .blueprints.admin import admin_bp
@@ -93,6 +94,7 @@ def _register_blueprints(app: Flask) -> None:
     app.register_blueprint(notas_bp)
     app.register_blueprint(bulk_bp)
     app.register_blueprint(bulk_falabella_bp)
+    app.register_blueprint(historico_bp)
     app.register_blueprint(productos_bp)
     app.register_blueprint(reportes_bp)
     app.register_blueprint(admin_bp)
