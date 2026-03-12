@@ -112,18 +112,37 @@ def analizar():
     })
 
 
-def _analizar_excel(path: str) -> list:
-    import pandas as pd
-
-    df = pd.read_excel(path, dtype=str)
-
-    # Normalizar cabeceras
-    df.columns = [
+def _norm_cols(cols):
+    return [
         c.lower().strip()
          .replace('á','a').replace('é','e').replace('í','i').replace('ó','o').replace('ú','u').replace('ñ','n')
          .replace(' ', '_')
-        for c in df.columns
+        for c in cols
     ]
+
+
+def _analizar_excel(path: str) -> list:
+    import pandas as pd
+
+    # Auto-detectar fila de cabecera: la plantilla tiene 2 filas de banner antes de los headers.
+    # Probamos header=0 (archivo plano) y header=2 (plantilla con banner).
+    _required_probe = {'tipo_comprobante', 'serie', 'n_de_orden', 'fecha_emision',
+                       'tipo_doc', 'num_doc', 'nombre_cliente', 'nombre_producto'}
+    df = None
+    for hdr in (0, 1, 2, 3):
+        _df = pd.read_excel(path, header=hdr, dtype=str)
+        _cols = set(_norm_cols(_df.columns))
+        # n de orden normaliza a n_de_orden
+        if 'n_de_orden' not in _cols and any(c in _cols for c in ('n_orden', 'numero_orden', 'orden', 'numero_de_orden', 'n_de_orden')):
+            _cols.add('n_de_orden')
+        if _required_probe.issubset(_cols):
+            df = _df
+            break
+    if df is None:
+        df = pd.read_excel(path, dtype=str)
+
+    # Normalizar cabeceras
+    df.columns = _norm_cols(df.columns)
 
     required = {'tipo_comprobante', 'serie', 'n_de_orden', 'fecha_emision',
                 'tipo_doc', 'num_doc', 'nombre_cliente', 'nombre_producto',
