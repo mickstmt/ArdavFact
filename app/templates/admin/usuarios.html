@@ -151,7 +151,7 @@
 {% endblock %}
 
 
-{% block scripts %}
+{% block extra_js %}
 <script>
 // ── Crear usuario ───────────────────────────────────────────────────────────
 document.getElementById('formCrearUsuario').addEventListener('submit', function(e) {
@@ -204,8 +204,7 @@ async function toggleUsuario(userId, activo) {
   });
   if (!ok.isConfirmed) return;
 
-  const resp = await afFetch(`/admin/usuarios/${userId}/toggle`, { method: 'POST' });
-  const data = await resp.json();
+  const data = await afFetch(`/admin/usuarios/${userId}/toggle`, { method: 'POST' });
 
   if (data.success) {
     showToast('success', data.message);
