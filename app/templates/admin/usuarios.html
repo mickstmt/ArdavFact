@@ -110,22 +110,23 @@
         <h5 class="modal-title"><i class="bi bi-person-plus me-2"></i>Nuevo usuario</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
+      <form id="formCrearUsuario">
       <div class="modal-body">
         <div class="mb-3">
           <label class="form-label small">Nombre completo <span class="text-danger">*</span></label>
-          <input type="text" id="nuNombre" class="form-control form-control-sm" placeholder="Ej: María García">
+          <input type="text" name="nombre" id="nuNombre" class="form-control form-control-sm" placeholder="Ej: María García">
         </div>
         <div class="mb-3">
           <label class="form-label small">Email <span class="text-danger">*</span></label>
-          <input type="email" id="nuEmail" class="form-control form-control-sm" placeholder="correo@empresa.com">
+          <input type="email" name="email" id="nuEmail" class="form-control form-control-sm" placeholder="correo@empresa.com">
         </div>
         <div class="mb-3">
           <label class="form-label small">Contraseña <span class="text-danger">*</span></label>
-          <input type="password" id="nuPassword" class="form-control form-control-sm" placeholder="Mínimo 8 caracteres">
+          <input type="password" name="password" id="nuPassword" class="form-control form-control-sm" placeholder="Mínimo 8 caracteres">
         </div>
         <div class="mb-3">
           <label class="form-label small">Rol</label>
-          <select id="nuRol" class="form-select form-select-sm">
+          <select name="rol_id" id="nuRol" class="form-select form-select-sm">
             <option value="">— Sin rol —</option>
             {% for rol in roles %}
               <option value="{{ rol.id }}">{{ rol.nombre }}</option>
@@ -133,16 +134,17 @@
           </select>
         </div>
         <div class="form-check">
-          <input class="form-check-input" type="checkbox" id="nuAdmin">
+          <input class="form-check-input" type="checkbox" name="es_admin" id="nuAdmin">
           <label class="form-check-label small" for="nuAdmin">Es administrador</label>
         </div>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
-        <button type="button" class="btn btn-primary btn-sm" onclick="crearUsuario()">
+        <button type="submit" class="btn btn-primary btn-sm">
           <i class="bi bi-check-lg me-1"></i>Crear usuario
         </button>
       </div>
+      </form>
     </div>
   </div>
 </div>
@@ -152,32 +154,42 @@
 {% block scripts %}
 <script>
 // ── Crear usuario ───────────────────────────────────────────────────────────
-async function crearUsuario() {
-  const nombre   = document.getElementById('nuNombre').value.trim();
-  const email    = document.getElementById('nuEmail').value.trim();
-  const password = document.getElementById('nuPassword').value.trim();
-  const rol_id   = document.getElementById('nuRol').value || null;
-  const es_admin = document.getElementById('nuAdmin').checked;
+document.getElementById('formCrearUsuario').addEventListener('submit', function(e) {
+  e.preventDefault();
+  const formData = new FormData(this);
+  const payload = {
+    nombre:   formData.get('nombre').trim(),
+    email:    formData.get('email').trim(),
+    password: formData.get('password').trim(),
+    rol_id:   formData.get('rol_id') || null,
+    es_admin: document.getElementById('nuAdmin').checked,
+  };
 
-  if (!nombre || !email || !password) {
-    showToast('warning', 'Nombre, email y contraseña son obligatorios.');
-    return;
-  }
-
-  const resp = await afFetch('{{ url_for("admin.crear_usuario") }}', {
-    method: 'POST',
-    body: JSON.stringify({ nombre, email, password, rol_id, es_admin }),
+  Swal.fire({
+    title: 'Creando usuario...',
+    allowOutsideClick: false,
+    didOpen: () => Swal.showLoading(),
   });
-  const data = await resp.json();
 
-  if (data.success) {
-    showToast('success', data.message);
-    bootstrap.Modal.getInstance(document.getElementById('modalNuevoUsuario')).hide();
-    setTimeout(() => window.location.reload(), 1000);
-  } else {
-    showToast('error', data.message);
-  }
-}
+  fetch('{{ url_for("admin.crear_usuario") }}', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': getCsrfToken(),
+    },
+    body: JSON.stringify(payload),
+  })
+    .then(res => res.json())
+    .then(data => {
+      if (data.success) {
+        Swal.fire({ title: '¡Éxito!', text: data.message, icon: 'success', timer: 2000, showConfirmButton: false })
+          .then(() => location.reload());
+      } else {
+        Swal.fire('Error', data.message, 'error');
+      }
+    })
+    .catch(() => Swal.fire('Error', 'Fallo al conectar con el servidor.', 'error'));
+});
 
 // ── Toggle activo / inactivo ────────────────────────────────────────────────
 async function toggleUsuario(userId, activo) {
