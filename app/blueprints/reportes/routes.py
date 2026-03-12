@@ -26,7 +26,7 @@ def _build_mapa_costos() -> dict:
     return mapa
 
 _TIPOS_VENTA   = ('FACTURA', 'BOLETA')
-_ESTADOS_VALIDOS = ('ENVIADO', 'ACEPTADO')
+_ESTADOS_VALIDOS = ('ENVIADO', 'ACEPTADO', 'HISTORICO')
 
 
 # ─────────────────────────────────────────────────────────────────────────────
