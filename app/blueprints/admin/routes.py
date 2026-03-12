@@ -36,7 +36,7 @@ def crear_usuario():
     nombre   = payload.get('nombre', '').strip()
     email    = payload.get('email', '').strip().lower()
     password = payload.get('password', '').strip()
-    rol_id   = payload.get('rol_id', type=int) or payload.get('rol_id')
+    rol_id   = payload.get('rol_id') or None
     es_admin = bool(payload.get('es_admin', False))
 
     if not nombre or not email or not password:
