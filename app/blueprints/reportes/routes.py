@@ -25,8 +25,26 @@ def _build_mapa_costos() -> dict:
             mapa[sku_str] = float(c.costo)
     return mapa
 
-_TIPOS_VENTA   = ('FACTURA', 'BOLETA')
+_TIPOS_VENTA     = ('FACTURA', 'BOLETA')
 _ESTADOS_VALIDOS = ('ENVIADO', 'ACEPTADO', 'HISTORICO')
+
+# Patrones de numero_orden por fuente
+_FUENTE_FILTROS = {
+    'MercadoLibre': lambda q: q.filter(
+        Comprobante.numero_orden.ilike('2%'),
+        func.length(Comprobante.numero_orden) >= 14,
+    ),
+    'Falabella': lambda q: q.filter(
+        Comprobante.numero_orden.ilike('3%'),
+        func.length(Comprobante.numero_orden) >= 10,
+    ),
+    'WooCommerce': lambda q: q.filter(
+        Comprobante.numero_orden.isnot(None),
+        ~Comprobante.numero_orden.ilike('2%') | (func.length(Comprobante.numero_orden) < 14),
+        ~Comprobante.numero_orden.ilike('3%') | (func.length(Comprobante.numero_orden) < 10),
+    ),
+    'Manual': lambda q: q.filter(Comprobante.numero_orden.is_(None)),
+}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -42,6 +60,8 @@ def ganancias():
     fecha_fin_str = request.args.get('fecha_fin', '')
     tipo_filtro   = request.args.get('tipo', '')
     page          = request.args.get('page', 1, type=int)
+
+    fuente_filtro = request.args.get('fuente', '')
 
     fecha_ini = _parse_date(fecha_ini_str)
     fecha_fin = _parse_date(fecha_fin_str)
@@ -63,6 +83,8 @@ def ganancias():
     )
     if tipo_filtro in _TIPOS_VENTA:
         query = query.filter(Comprobante.tipo_comprobante == tipo_filtro)
+    if fuente_filtro in _FUENTE_FILTROS:
+        query = _FUENTE_FILTROS[fuente_filtro](query)
 
     mapa_costos = _build_mapa_costos()
     todos     = query.all()
@@ -80,6 +102,7 @@ def ganancias():
         fecha_ini=fecha_ini.isoformat(),
         fecha_fin=fecha_fin.isoformat(),
         tipo_filtro=tipo_filtro,
+        fuente_filtro=fuente_filtro,
     )
 
 
@@ -96,9 +119,10 @@ def exportar_ganancias():
     from openpyxl.styles import Font, PatternFill, Alignment
     from openpyxl.utils import get_column_letter
 
-    fecha_ini = _parse_date(request.args.get('fecha_ini', '')) or date.today().replace(day=1)
-    fecha_fin = _parse_date(request.args.get('fecha_fin', '')) or date.today()
-    tipo_filtro = request.args.get('tipo', '')
+    fecha_ini     = _parse_date(request.args.get('fecha_ini', '')) or date.today().replace(day=1)
+    fecha_fin     = _parse_date(request.args.get('fecha_fin', '')) or date.today()
+    tipo_filtro   = request.args.get('tipo', '')
+    fuente_filtro = request.args.get('fuente', '')
 
     query = (
         Comprobante.query
@@ -112,6 +136,8 @@ def exportar_ganancias():
     )
     if tipo_filtro in _TIPOS_VENTA:
         query = query.filter(Comprobante.tipo_comprobante == tipo_filtro)
+    if fuente_filtro in _FUENTE_FILTROS:
+        query = _FUENTE_FILTROS[fuente_filtro](query)
 
     mapa_costos = _build_mapa_costos()
     todos   = query.all()
@@ -225,9 +251,10 @@ def exportar_ganancias_detallado():
     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
     from openpyxl.utils import get_column_letter
 
-    fecha_ini   = _parse_date(request.args.get('fecha_ini', '')) or date.today().replace(day=1)
-    fecha_fin   = _parse_date(request.args.get('fecha_fin', '')) or date.today()
-    tipo_filtro = request.args.get('tipo', '')
+    fecha_ini     = _parse_date(request.args.get('fecha_ini', '')) or date.today().replace(day=1)
+    fecha_fin     = _parse_date(request.args.get('fecha_fin', '')) or date.today()
+    tipo_filtro   = request.args.get('tipo', '')
+    fuente_filtro = request.args.get('fuente', '')
 
     _TIPOS_DETALLADO = _TIPOS_VENTA + ('NOTA_CREDITO',)
     query = (
@@ -242,6 +269,8 @@ def exportar_ganancias_detallado():
     )
     if tipo_filtro in _TIPOS_VENTA:
         query = query.filter(Comprobante.tipo_comprobante == tipo_filtro)
+    if fuente_filtro in _FUENTE_FILTROS:
+        query = _FUENTE_FILTROS[fuente_filtro](query)
 
     mapa_costos = _build_mapa_costos()
     comprobantes = query.all()
