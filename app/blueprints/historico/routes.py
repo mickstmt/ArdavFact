@@ -96,18 +96,20 @@ def analizar():
         if os.path.exists(tmp):
             os.remove(tmp)
 
-    total_ok      = sum(1 for o in ordenes if o['status'] == 'OK')
-    total_warning = sum(1 for o in ordenes if o['status'] == 'WARNING')
-    total_error   = sum(1 for o in ordenes if o['status'] == 'ERROR')
+    total_ok        = sum(1 for o in ordenes if o['status'] == 'OK')
+    total_warning   = sum(1 for o in ordenes if o['status'] == 'WARNING')
+    total_error     = sum(1 for o in ordenes if o['status'] == 'ERROR')
+    total_cancelado = sum(1 for o in ordenes if o['status'] == 'CANCELADO')
 
     return jsonify({
         'success': True,
         'ordenes': ordenes,
         'resumen': {
-            'total':   len(ordenes),
-            'ok':      total_ok,
-            'warning': total_warning,
-            'error':   total_error,
+            'total':     len(ordenes),
+            'ok':        total_ok,
+            'warning':   total_warning,
+            'error':     total_error,
+            'cancelado': total_cancelado,
         },
     })
 
@@ -181,15 +183,18 @@ def _analizar_excel(path: str) -> list:
         costo_envio_raw = _v('costo_envio', '0')
         doc_ref    = _v('doc_referencia', '')
         total_raw  = _v('total_venta', '')
+        estado_raw = _v('estado', '').upper()
+        cancelado  = estado_raw == 'CANCELADO'
 
         if num_orden not in grupos:
             errores = []
-            if tipo_comp not in _TIPOS_COMPROBANTE:
-                errores.append(f'tipo_comprobante inválido: {tipo_comp!r}')
-            if not fecha:
-                errores.append('fecha_emision inválida o vacía')
-            if not num_doc:
-                errores.append('num_doc vacío')
+            if not cancelado:
+                if tipo_comp not in _TIPOS_COMPROBANTE:
+                    errores.append(f'tipo_comprobante inválido: {tipo_comp!r}')
+                if not fecha:
+                    errores.append('fecha_emision inválida o vacía')
+                if not num_doc:
+                    errores.append('num_doc vacío')
 
             try:
                 costo_envio = Decimal(costo_envio_raw.replace(',', '.') or '0')
@@ -210,7 +215,7 @@ def _analizar_excel(path: str) -> list:
                 'items':          [],
                 'errores':        errores,
                 'advertencias':   [],
-                'status':         'ERROR' if errores else 'OK',
+                'status':         'CANCELADO' if cancelado else ('ERROR' if errores else 'OK'),
             }
 
         orden = grupos[num_orden]
@@ -312,6 +317,8 @@ def procesar():
         )
 
         for o in ordenes_sorted:
+            if o.get('status') == 'CANCELADO':
+                continue
             try:
                 serie_hist = _serie_historica(o.get('serie_original', 'B001'))
                 tipo_comp  = o['tipo_comprobante']
@@ -497,7 +504,7 @@ def plantilla():
     BORDER   = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
 
     # Banner fila 1
-    ws.merge_cells('A1:N1')
+    ws.merge_cells('A1:O1')
     b = ws.cell(row=1, column=1,
                 value='PLANTILLA IMPORTACIÓN HISTÓRICA — ArdavFact  |  Una fila por ítem. Mismo "n de orden" = misma venta.')
     b.font      = Font(bold=True, color='FFFFFFFF', size=10)
@@ -506,7 +513,7 @@ def plantilla():
     ws.row_dimensions[1].height = 22
 
     # Leyenda fila 2
-    ws.merge_cells('A2:N2')
+    ws.merge_cells('A2:O2')
     l = ws.cell(row=2, column=1,
                 value='Verde = Obligatorio  |  Amarillo = Opcional  |  Fila 4 es de ejemplo, bórrala antes de subir')
     l.font      = Font(italic=True, size=9, color='FF333333')
@@ -530,6 +537,7 @@ def plantilla():
         ('costo_envio',      False, 'Costo de envío (0 si no aplica)'),
         ('doc_referencia',   False, 'Solo para NOTA_CREDITO. Ej: B001-00000001'),
         ('total_venta',      False, 'Total de la venta. Se calcula si se deja vacío'),
+        ('estado',           False, 'CANCELADO = se omite la orden. Vacío = se importa normalmente'),
     ]
     for col_idx, (nombre, oblig, nota) in enumerate(campos, start=1):
         c = ws.cell(row=3, column=col_idx, value=nombre)
@@ -545,9 +553,9 @@ def plantilla():
     # Filas 4-5: ejemplo
     ejemplos = [
         ['BOLETA', 'B001', 'ORD-001', '15/01/2026', 'DNI', '12345678', 'Juan Pérez',
-         'Zapatilla Running Roja T42', '1', '118.00', '1234567-ROJO-42', '10.00', '', '128.00'],
-        ['BOLETA', 'B001', 'ORD-001', '15/01/2026', 'DNI', '12345678', 'Juan Pérez',
-         'Polo Básico Blanco T M', '2', '35.40', '9876543-BL-M', '0', '', ''],
+         'Zapatilla Running Roja T42', '1', '118.00', '1234567-ROJO-42', '10.00', '', '128.00', ''],
+        ['BOLETA', 'B001', 'ORD-002', '15/01/2026', 'DNI', '87654321', 'María García',
+         'Polo Básico Blanco T M', '2', '35.40', '9876543-BL-M', '0', '', '', 'CANCELADO'],
     ]
     for row_off, fila in enumerate(ejemplos):
         for col_idx, val in enumerate(fila, start=1):
@@ -558,7 +566,7 @@ def plantilla():
             c.border    = BORDER
         ws.row_dimensions[4 + row_off].height = 17
 
-    anchos = [18, 8, 14, 14, 8, 14, 26, 32, 10, 16, 20, 12, 20, 14]
+    anchos = [18, 8, 14, 14, 8, 14, 26, 32, 10, 16, 20, 12, 20, 14, 14]
     for i, w in enumerate(anchos, start=1):
         ws.column_dimensions[get_column_letter(i)].width = w
     ws.freeze_panes = 'A4'
@@ -580,6 +588,7 @@ def plantilla():
         ('costo_envio',      'Costo de envío de la orden. Solo en la primera fila de cada orden',     False),
         ('doc_referencia',   'Número del comprobante anulado. Solo para NOTA_CREDITO. Ej: B001-00000001', False),
         ('total_venta',      'Total de la venta. Si vacío, se calcula desde precio_unitario × cantidad', False),
+        ('estado',           'CANCELADO = la orden se omite en la importación. Vacío = se importa normalmente', False),
     ]
     ws2.cell(row=1, column=1, value='Campo').font        = Font(bold=True)
     ws2.cell(row=1, column=2, value='Descripción').font  = Font(bold=True)
