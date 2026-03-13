@@ -467,10 +467,15 @@ def descargar_errores():
         else:
             for item in items:
                 item_error = item.get('error')
+                item_adv   = item.get('advertencia')
                 if item_error:
                     tipo_msg = 'Error ítem'
                     detalle  = item_error
                     fill     = ERR_FILL
+                elif item_adv:
+                    tipo_msg = 'Advertencia ítem'
+                    detalle  = item_adv
+                    fill     = WARN_FILL
                 elif errores_ord or advertencias:
                     tipo_msg = 'Advertencia' if status == 'WARNING' else status
                     detalle  = ' | '.join(errores_ord + advertencias)

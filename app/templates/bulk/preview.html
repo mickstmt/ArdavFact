@@ -246,16 +246,26 @@
     const o = todasLasOrdenes[idx];
     document.getElementById('modalTitulo').textContent = `Orden ${o.numero_orden}`;
 
-    const filas = (o.items || []).map(it => `
-    <tr class="${it.error ? 'table-danger' : ''}">
-      <td>${it.sku || '—'}</td>
-      <td>${it.descripcion}</td>
-      <td class="text-center">${parseFloat(it.cantidad || 1).toFixed(0)}</td>
-      <td class="text-end">S/ ${parseFloat(it.precio_sin_igv || 0).toFixed(2)}</td>
-      <td class="text-end">S/ ${parseFloat(it.igv_total || 0).toFixed(2)}</td>
-      <td class="text-end fw-semibold">S/ ${parseFloat(it.subtotal_con_igv || 0).toFixed(2)}</td>
-      <td>${it.error ? `<span class="text-danger small">${it.error}</span>` : '<i class="bi bi-check-circle-fill text-success"></i>'}</td>
-    </tr>`).join('');
+    const filas = (o.items || []).map(it => {
+      const rowClass = it.error ? 'table-danger' : it.advertencia ? 'table-warning' : '';
+      const descHtml = it.descripcion_ref
+        ? `<span style="font-size:.8rem;">(SKU: ${it.sku})</span> S/ ${parseFloat(it.subtotal_con_igv||0).toFixed(2)}
+           <br><small class="text-muted">Ref. BD: ${it.descripcion_ref}</small>`
+        : `${it.sku || '—'} &nbsp;<span class="text-muted small">${it.descripcion}</span>`;
+      const estadoHtml = it.error
+        ? `<span class="text-danger small">${it.error}</span>`
+        : it.advertencia
+          ? `<i class="bi bi-exclamation-triangle-fill text-warning"></i> <span class="text-warning small">${it.advertencia}</span>`
+          : '<i class="bi bi-check-circle-fill text-success"></i>';
+      return `<tr class="${rowClass}">
+        <td>${descHtml}</td>
+        <td class="text-center">${parseFloat(it.cantidad || 1).toFixed(0)}</td>
+        <td class="text-end">S/ ${parseFloat(it.precio_sin_igv || 0).toFixed(2)}</td>
+        <td class="text-end">S/ ${parseFloat(it.igv_total || 0).toFixed(2)}</td>
+        <td class="text-end fw-semibold">S/ ${parseFloat(it.subtotal_con_igv || 0).toFixed(2)}</td>
+        <td>${estadoHtml}</td>
+      </tr>`;
+    }).join('');
 
     const errMsgs = [...(o.errores || []).map(e => `<li class="text-danger">${e}</li>`),
     ...(o.advertencias || []).map(e => `<li class="text-warning">${e}</li>`)].join('');
@@ -264,11 +274,11 @@
     ${errMsgs ? `<ul class="mb-3 small ps-3">${errMsgs}</ul>` : ''}
     <table class="table table-sm table-bordered">
       <thead class="table-light">
-        <tr><th>SKU</th><th>Descripción</th><th class="text-center">Cant.</th>
+        <tr><th>SKU / Descripción</th><th class="text-center">Cant.</th>
             <th class="text-end">Base</th>
             <th class="text-end">IGV</th><th class="text-end">Total</th><th></th></tr>
       </thead>
-      <tbody>${filas || '<tr><td colspan="7" class="text-center text-muted">Sin ítems</td></tr>'}</tbody>
+      <tbody>${filas || '<tr><td colspan="6" class="text-center text-muted">Sin ítems</td></tr>'}</tbody>
     </table>
     <div class="text-end">
       <strong>Costo envío:</strong> S/ ${parseFloat(o.costo_envio || 0).toFixed(2)} &nbsp;|&nbsp;

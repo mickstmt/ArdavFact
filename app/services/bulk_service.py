@@ -12,6 +12,7 @@ Columnas Excel (0-indexed):
   X(23)=Costo Envío (con IGV)
 """
 import logging
+import re
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from typing import Optional
@@ -150,6 +151,8 @@ def _analizar_orden(orden: dict, config: dict, cache_clientes: dict | None = Non
         items_analizados.append(item_analizado)
         if item_analizado['error']:
             errores.append(item_analizado['error'])
+        elif item_analizado.get('advertencia'):
+            advertencias.append(item_analizado['advertencia'])
 
     # Verificar duplicado
     comp_existente = Comprobante.query.filter_by(numero_orden=orden['numero_orden'])\
@@ -204,11 +207,64 @@ def _analizar_orden(orden: dict, config: dict, cache_clientes: dict | None = Non
     }
 
 
+def _match_sku(sku_raw: str) -> dict:
+    """
+    Empareja un SKU con la BD: Exacto (Variación → Producto) → Fuzzy 7-dígitos.
+    Retorna dict con status='ok'|'warning'|'error', variacion_id, desc_ref, msg.
+    """
+    # Normalizar: quitar .0, normalizar guiones especiales
+    sku = str(sku_raw).strip()
+    if sku.endswith('.0'):
+        sku = sku[:-2]
+    sku = sku.replace('\u2013', '-').replace('\u2014', '-')  # en-dash, em-dash
+
+    if not sku:
+        return {'status': 'error', 'msg': 'SKU vacío', 'variacion_id': None, 'desc_ref': None}
+
+    # 1. Exact match — Variación
+    var = Variacion.query.filter(Variacion.sku.ilike(sku)).first()
+    if var:
+        attr = ', '.join(f'{k}: {v}' for k, v in (var.atributos or {}).items())
+        nombre = f'{var.producto.nombre} ({attr})' if attr else var.producto.nombre
+        return {'status': 'ok', 'variacion_id': var.id, 'desc_ref': nombre, 'msg': None}
+
+    # 2. Exact match — Producto simple
+    prod = Producto.query.filter(Producto.sku.ilike(sku)).first()
+    if prod:
+        return {'status': 'ok', 'variacion_id': None, 'desc_ref': prod.nombre, 'msg': None}
+
+    # 3. Fuzzy: primeros 7 dígitos consecutivos
+    m = re.search(r'(\d{7})', sku)
+    if m:
+        digits = m.group(1)
+        v_results = Variacion.query.filter(Variacion.sku.ilike(f'%{digits}%')).all()
+        if len(v_results) == 1:
+            var = v_results[0]
+            attr = ', '.join(f'{k}: {v}' for k, v in (var.atributos or {}).items())
+            nombre = f'{var.producto.nombre} ({attr})' if attr else var.producto.nombre
+            return {'status': 'ok', 'variacion_id': var.id, 'desc_ref': nombre, 'msg': None}
+        if len(v_results) > 1:
+            return {'status': 'warning',
+                    'msg': f'SKU {sku}: Múltiples variaciones encontradas para la base',
+                    'variacion_id': None, 'desc_ref': None}
+
+        p_results = Producto.query.filter(Producto.sku.ilike(f'%{digits}%')).all()
+        if len(p_results) == 1:
+            return {'status': 'ok', 'variacion_id': None, 'desc_ref': p_results[0].nombre, 'msg': None}
+        if len(p_results) > 1:
+            return {'status': 'warning',
+                    'msg': f'SKU {sku}: Múltiples productos encontrados para la base',
+                    'variacion_id': None, 'desc_ref': None}
+
+    return {'status': 'error', 'msg': f'SKU "{sku}" no encontrado en la BD.', 'variacion_id': None, 'desc_ref': None}
+
+
 def _analizar_item(item_raw: dict) -> dict:
-    """Analiza un ítem individual: busca variación/producto, calcula IGV."""
+    """Analiza un ítem individual: busca variación/producto (con fuzzy), calcula IGV."""
     sku   = (item_raw.get('sku') or '').strip()
     desc  = (item_raw.get('descripcion') or sku or 'Producto').strip()
     error = None
+    advertencia = None
 
     try:
         precio_con_igv = Decimal(
@@ -229,23 +285,27 @@ def _analizar_item(item_raw: dict) -> dict:
     if precio_con_igv <= 0:
         error = f'Precio inválido para SKU "{sku}".'
 
-    # Buscar variación o producto
+    # Buscar variación o producto con fuzzy matching
     variacion_id = None
+    desc_ref = None
     if sku:
-        var = Variacion.query.filter(Variacion.sku.ilike(sku)).first()
-        if var:
-            variacion_id = var.id
-            desc = desc or f'{var.producto.nombre} - {sku}'
-        else:
-            prod = Producto.query.filter(Producto.sku.ilike(sku)).first()
-            if not prod:
-                error = error or f'SKU "{sku}" no encontrado en la BD.'
+        match = _match_sku(sku)
+        if match['status'] == 'ok':
+            variacion_id = match['variacion_id']
+            desc_ref = match['desc_ref']
+            if desc_ref and not desc:
+                desc = desc_ref
+        elif match['status'] == 'warning':
+            advertencia = match['msg']
+        else:  # error
+            error = error or match['msg']
 
     calc = calcular_igv_item(precio_con_igv, cantidad, '10')
 
     return {
         'sku':                    sku,
         'descripcion':            desc,
+        'descripcion_ref':        desc_ref,
         'cantidad':               str(cantidad),
         'precio_con_igv':         str(precio_con_igv),
         'precio_sin_igv':         str(calc['precio_sin_igv']),
@@ -255,6 +315,7 @@ def _analizar_item(item_raw: dict) -> dict:
         'subtotal_con_igv':       str(calc['subtotal_con_igv']),
         'variacion_id':           variacion_id,
         'error':                  error,
+        'advertencia':            advertencia,
     }
 
 
