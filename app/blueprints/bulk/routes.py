@@ -397,9 +397,10 @@ def descargar_plantilla(fuente):
 @login_required
 @requiere_permiso('ventas.crear')
 def descargar_errores():
-    """Genera Excel con órdenes en ERROR o WARNING para corrección y re-carga."""
+    """Genera Excel de errores en el mismo layout que el archivo fuente original."""
     import openpyxl
     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
 
     payload = request.get_json(force=True) or {}
     ordenes = payload.get('ordenes', [])
@@ -408,12 +409,63 @@ def descargar_errores():
     if not ordenes:
         return jsonify({'success': False, 'message': 'Sin datos para exportar.'}), 400
 
-    _FUENTE_NOMBRE = {'woo': 'WooCommerce', 'meli': 'MercadoLibre', 'falabella': 'Falabella'}
-    fuente_nombre = _FUENTE_NOMBRE.get(fuente, fuente.capitalize())
+    # ── Layouts por fuente (columnas 1-based) ─────────────────────────────────
+    # Cada layout define exactamente en qué columna va cada dato,
+    # igual que el archivo original — listo para corregir y re-subir.
+    #
+    # Falabella / MercadoLibre comparten cabecera en fila 1, datos desde fila 2
+    # WooCommerce: cabecera en fila 4, datos desde fila 5
 
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = 'Errores'
+    LAYOUTS = {
+        'falabella': {
+            'header_row': 1, 'data_start': 2,
+            'freeze': 'B2',
+            'col_orden':   5,   # E
+            'col_fecha':   4,   # D
+            'col_nombre':  10,  # J
+            'col_doc':     12,  # L
+            'col_sku':     2,   # B
+            'col_desc':    41,  # AO
+            'col_precio':  36,  # AJ
+            'col_envio':   38,  # AL
+            'col_cant':    None,
+            'col_error':   42,  # AP
+            'col_widths':  {2:18, 5:22, 10:28, 12:16, 36:16, 38:16, 41:34, 42:50},
+        },
+        'meli': {
+            'header_row': 1, 'data_start': 2,
+            'freeze': 'B2',
+            'col_orden':   1,   # A
+            'col_fecha':   7,   # G
+            'col_nombre':  47,  # AU
+            'col_doc':     50,  # AX
+            'col_sku':     31,  # AE
+            'col_desc':    43,  # AQ
+            'col_precio':  34,  # AH
+            'col_envio':   22,  # V
+            'col_cant':    35,  # AI
+            'col_error':   51,  # AY
+            'col_widths':  {1:22, 7:14, 22:16, 31:22, 34:16, 35:10, 43:34, 47:26, 50:14, 51:50},
+        },
+        'woo': {
+            'header_row': 4, 'data_start': 5,
+            'freeze': 'A5',
+            'col_orden':   1,   # A
+            'col_fecha':   3,   # C
+            'col_nombre':  8,   # H
+            'col_doc':     7,   # G
+            'col_sku':     10,  # J
+            'col_desc':    9,   # I
+            'col_precio':  13,  # M
+            'col_envio':   24,  # X
+            'col_cant':    11,  # K
+            'col_error':   25,  # Y
+            'col_widths':  {1:22, 3:14, 7:16, 8:28, 9:34, 10:22, 11:10, 13:16, 24:16, 25:50},
+        },
+    }
+
+    layout = LAYOUTS.get(fuente, LAYOUTS['woo'])
+    HDR_ROW = layout['header_row']
 
     HDR_FILL  = PatternFill('solid', fgColor='FF1e3a5f')
     ERR_FILL  = PatternFill('solid', fgColor='FFF8D7DA')
@@ -421,29 +473,52 @@ def descargar_errores():
     THIN      = Side(style='thin', color='CCCCCC')
     BORDER    = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
 
-    hdrs = [
-        'Fuente', 'N° Orden', 'Fecha', 'Nombre Cliente', 'N° Documento',
-        'SKU', 'Descripción', 'Cantidad', 'Precio Unit. (S/)', 'Costo Envío (S/)',
-        'Tipo', 'Detalle del error / advertencia',
-    ]
-    ws.append(hdrs)
-    for col_idx in range(1, len(hdrs) + 1):
-        cell = ws.cell(row=1, column=col_idx)
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = {'woo': 'WooCommerce', 'meli': 'MercadoLibre', 'falabella': 'Falabella'}.get(fuente, 'Errores')
+
+    # ── Cabeceras ─────────────────────────────────────────────────────────────
+    col_labels = {
+        layout['col_orden']:  'N° Orden',
+        layout['col_fecha']:  'Fecha',
+        layout['col_nombre']: 'Nombre Cliente',
+        layout['col_doc']:    'DNI / RUC',
+        layout['col_sku']:    'SKU',
+        layout['col_desc']:   'Descripción',
+        layout['col_precio']: 'Precio (S/)',
+        layout['col_envio']:  'Costo Envío (S/)',
+        layout['col_error']:  'ERROR / ADVERTENCIA  ← corregir aquí',
+    }
+    if layout['col_cant']:
+        col_labels[layout['col_cant']] = 'Cantidad'
+
+    for col, label in col_labels.items():
+        cell = ws.cell(row=HDR_ROW, column=col, value=label)
         cell.font      = Font(bold=True, color='FFFFFFFF', size=10)
         cell.fill      = HDR_FILL
         cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
         cell.border    = BORDER
-    ws.row_dimensions[1].height = 28
+    ws.row_dimensions[HDR_ROW].height = 28
 
-    col_widths = [14, 22, 12, 28, 16, 18, 36, 10, 16, 16, 12, 50]
-    for i, w in enumerate(col_widths, start=1):
-        ws.column_dimensions[openpyxl.utils.get_column_letter(i)].width = w
+    for col, w in layout['col_widths'].items():
+        ws.column_dimensions[get_column_letter(col)].width = w
+
+    # ── Datos ─────────────────────────────────────────────────────────────────
+    def _celda(row, col, valor, fill=None):
+        if col is None:
+            return
+        c = ws.cell(row=row, column=col, value=valor)
+        if fill:
+            c.fill = fill
+        c.border    = BORDER
+        c.alignment = Alignment(vertical='center', wrap_text=(col == layout['col_error']))
+        return c
+
+    current_row = layout['data_start']
 
     for orden in ordenes:
         num_orden    = orden.get('numero_orden', '')
-        fecha_str    = orden.get('fecha_emision', '')
-        if fecha_str and 'T' in fecha_str:
-            fecha_str = fecha_str[:10]
+        fecha_str    = (orden.get('fecha_emision') or '')[:10]
         nombre       = orden.get('nombre_cliente', '')
         num_doc      = orden.get('numero_documento', '')
         costo_envio  = float(orden.get('costo_envio', 0) or 0)
@@ -451,61 +526,54 @@ def descargar_errores():
         advertencias = orden.get('advertencias', [])
         items        = orden.get('items', [])
         status       = orden.get('status', 'ERROR')
-        row_fill     = ERR_FILL if status == 'ERROR' else WARN_FILL
+        ord_fill     = ERR_FILL if status == 'ERROR' else WARN_FILL
 
         if not items:
-            # Orden sin ítems — fila única con el error de la orden
-            tipo_msg  = status
-            detalle   = ' | '.join(errores_ord + advertencias) or '—'
-            ws.append([fuente_nombre, num_orden, fecha_str, nombre, num_doc,
-                       '—', '—', '', '', costo_envio, tipo_msg, detalle])
-            for cell in ws[ws.max_row]:
-                cell.fill   = row_fill
-                cell.border = BORDER
-                cell.alignment = Alignment(vertical='center', wrap_text=True)
-            ws.row_dimensions[ws.max_row].height = 18
-        else:
-            for item in items:
-                item_error = item.get('error')
-                item_adv   = item.get('advertencia')
-                if item_error:
-                    tipo_msg = 'Error ítem'
-                    detalle  = item_error
-                    fill     = ERR_FILL
-                elif item_adv:
-                    tipo_msg = 'Advertencia ítem'
-                    detalle  = item_adv
-                    fill     = WARN_FILL
-                elif errores_ord or advertencias:
-                    tipo_msg = 'Advertencia' if status == 'WARNING' else status
-                    detalle  = ' | '.join(errores_ord + advertencias)
-                    fill     = row_fill
-                else:
-                    continue  # ítem OK en una orden OK no debería llegar aquí
+            detalle = ' | '.join(errores_ord + advertencias) or '—'
+            _celda(current_row, layout['col_orden'],  num_orden, ord_fill)
+            _celda(current_row, layout['col_fecha'],  fecha_str, ord_fill)
+            _celda(current_row, layout['col_nombre'], nombre,    ord_fill)
+            _celda(current_row, layout['col_doc'],    num_doc,   ord_fill)
+            _celda(current_row, layout['col_envio'],  costo_envio, ord_fill)
+            _celda(current_row, layout['col_error'],  detalle,   ord_fill)
+            ws.row_dimensions[current_row].height = 18
+            current_row += 1
+            continue
 
-                ws.append([
-                    fuente_nombre,
-                    num_orden,
-                    fecha_str,
-                    nombre,
-                    num_doc,
-                    item.get('sku', ''),
-                    item.get('descripcion', ''),
-                    float(item.get('cantidad', 1) or 1),
-                    float(item.get('precio_con_igv', 0) or 0),
-                    costo_envio,
-                    tipo_msg,
-                    detalle,
-                ])
-                for cell in ws[ws.max_row]:
-                    cell.fill   = fill
-                    cell.border = BORDER
-                    cell.alignment = Alignment(vertical='center', wrap_text=True)
-                ws.row_dimensions[ws.max_row].height = 18
-                # costo_envio sólo en primera fila de la orden
-                costo_envio = ''
+        primera_fila = True
+        for item in items:
+            item_error = item.get('error')
+            item_adv   = item.get('advertencia')
+            if item_error:
+                detalle = item_error
+                fill    = ERR_FILL
+            elif item_adv:
+                detalle = item_adv
+                fill    = WARN_FILL
+            elif errores_ord or advertencias:
+                detalle = ' | '.join(errores_ord + advertencias)
+                fill    = ord_fill
+            else:
+                continue
 
-    ws.freeze_panes = 'A2'
+            _celda(current_row, layout['col_sku'],    item.get('sku', ''),                    fill)
+            _celda(current_row, layout['col_desc'],   item.get('descripcion', ''),            fill)
+            _celda(current_row, layout['col_precio'],  float(item.get('precio_con_igv', 0) or 0), fill)
+            _celda(current_row, layout['col_cant'],   float(item.get('cantidad', 1) or 1),    fill)
+            _celda(current_row, layout['col_error'],  detalle,                                fill)
+            # Datos de orden solo en primera fila del grupo
+            if primera_fila:
+                _celda(current_row, layout['col_orden'],  num_orden,   fill)
+                _celda(current_row, layout['col_fecha'],  fecha_str,   fill)
+                _celda(current_row, layout['col_nombre'], nombre,      fill)
+                _celda(current_row, layout['col_doc'],    num_doc,     fill)
+                _celda(current_row, layout['col_envio'],  costo_envio, fill)
+                primera_fila = False
+
+            ws.row_dimensions[current_row].height = 18
+            current_row += 1
+
+    ws.freeze_panes = layout['freeze']
 
     output = io.BytesIO()
     wb.save(output)
