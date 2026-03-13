@@ -55,18 +55,20 @@ def analizar():
         if os.path.exists(ruta_temp):
             os.remove(ruta_temp)
 
-    total_ok      = sum(1 for o in ordenes if o['status'] == 'OK')
-    total_warning = sum(1 for o in ordenes if o['status'] == 'WARNING')
-    total_error   = sum(1 for o in ordenes if o['status'] == 'ERROR')
+    total_ok        = sum(1 for o in ordenes if o['status'] == 'OK')
+    total_warning   = sum(1 for o in ordenes if o['status'] == 'WARNING')
+    total_error     = sum(1 for o in ordenes if o['status'] == 'ERROR')
+    total_cancelado = sum(1 for o in ordenes if o['status'] == 'CANCELADO')
 
     return jsonify({
         'success': True,
         'ordenes': ordenes,
         'resumen': {
-            'total':   len(ordenes),
-            'ok':      total_ok,
-            'warning': total_warning,
-            'error':   total_error,
+            'total':     len(ordenes),
+            'ok':        total_ok,
+            'warning':   total_warning,
+            'error':     total_error,
+            'cancelado': total_cancelado,
         },
     })
 

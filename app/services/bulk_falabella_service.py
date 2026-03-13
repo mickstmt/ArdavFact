@@ -9,6 +9,7 @@ Formato del Excel de Falabella (0-indexed, header=0 — primera fila son cabecer
   AJ(35)= Precio total del ítem (con IGV)
   AL(37)= Costo de envío (con IGV)
   AO(40)= Descripción del ítem
+  AZ(51)= Estado del pedido (Entregadas/Enviados/Pendientes/Canceladas/Devoluciones)
 """
 import logging
 
@@ -31,6 +32,10 @@ _COL_DOC    = 11  # L
 _COL_PRECIO = 35  # AJ — Precio total del ítem (con IGV); qty implícita = 1
 _COL_ENVIO  = 37  # AL — Costo de envío (con IGV)
 _COL_DESC   = 40  # AO — Descripción del ítem
+_COL_ESTADO = 51  # AZ — Estado del pedido
+
+# Estados que NO se procesan (no se crea boleta)
+_ESTADOS_OMITIR = {'canceladas', 'cancelada', 'cancelado', 'devoluciones', 'devolucion', 'devolución'}
 
 
 # ── API pública ──────────────────────────────────────────────────────────────
@@ -38,7 +43,7 @@ _COL_DESC   = 40  # AO — Descripción del ítem
 def analizar_excel(file_path: str, config: dict) -> list[dict]:
     """
     Lee el Excel de Falabella y agrupa filas por N° Orden.
-    Retorna lista de dicts con status='OK'|'WARNING'|'ERROR'.
+    Retorna lista de dicts con status='OK'|'WARNING'|'ERROR'|'CANCELADO'.
     """
     try:
         df = pd.read_excel(file_path, header=0, dtype=str)
@@ -53,6 +58,9 @@ def analizar_excel(file_path: str, config: dict) -> list[dict]:
         if not numero_orden:
             continue
 
+        estado_raw   = _val(row, _COL_ESTADO)
+        omitir       = estado_raw.lower().strip() in _ESTADOS_OMITIR
+
         if numero_orden not in ordenes:
             ordenes[numero_orden] = {
                 'numero_orden':    numero_orden,
@@ -63,13 +71,22 @@ def analizar_excel(file_path: str, config: dict) -> list[dict]:
                 'items_raw':       [],
                 'errores':         [],
                 'advertencias':    [],
+                'omitir':          omitir,
+                'estado_raw':      estado_raw,
             }
         else:
+            # Si alguna fila del grupo indica omisión, marcar la orden
+            if omitir:
+                ordenes[numero_orden]['omitir'] = True
+                ordenes[numero_orden]['estado_raw'] = estado_raw
             # El envío puede aparecer en cualquier fila del grupo
-            if ordenes[numero_orden]['costo_envio_str'] in ('', '0'):
+            if not omitir and ordenes[numero_orden]['costo_envio_str'] in ('', '0'):
                 envio_fila = _val(row, _COL_ENVIO)
                 if envio_fila and envio_fila != '0':
                     ordenes[numero_orden]['costo_envio_str'] = envio_fila
+
+        if omitir or ordenes[numero_orden]['omitir']:
+            continue  # no agregar ítems a órdenes omitidas
 
         sku = _limpiar_sku(_val(row, _COL_SKU))
         desc = _val(row, _COL_DESC) or _val(row, _COL_NOMBRE)
@@ -84,6 +101,22 @@ def analizar_excel(file_path: str, config: dict) -> list[dict]:
     cache_clientes: dict = {}
     resultados = []
     for numero_orden, orden in ordenes.items():
+        if orden['omitir']:
+            resultados.append({
+                'numero_orden':     orden['numero_orden'],
+                'nombre_cliente':   orden['nombre_cliente'],
+                'numero_documento': orden['numero_documento'],
+                'fecha_emision':    '',
+                'total_estimado':   0,
+                'status':           'CANCELADO',
+                'omitir':           True,
+                'estado_raw':       orden.get('estado_raw', ''),
+                'errores':          [],
+                'advertencias':     [],
+                'items':            [],
+                'ya_existe':        False,
+            })
+            continue
         resultado = _analizar_orden(orden, config, cache_clientes)
         resultados.append(resultado)
 

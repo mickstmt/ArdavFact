@@ -280,7 +280,7 @@ def descargar_plantilla(fuente):
     elif fuente == 'falabella':
         ws.title = 'Falabella'
 
-        # Fila 1: cabeceras (B=2, D=4, E=5, J=10, L=12, AJ=36, AL=38, AO=41)
+        # Fila 1: cabeceras (B=2, D=4, E=5, J=10, L=12, AJ=36, AL=38, AO=41, AZ=52)
         campos = [
             (2,  'SKU',                    True),   # B
             (4,  'Fecha',                  True),   # D
@@ -290,6 +290,7 @@ def descargar_plantilla(fuente):
             (36, 'Precio ítem\n(con IGV)', True),   # AJ
             (38, 'Costo Envío\n(con IGV)', False),  # AL
             (41, 'Descripción',            False),  # AO
+            (52, 'Estado',                 False),  # AZ
         ]
         for col, texto, oblig in campos:
             _hdr(ws, 1, col, texto, oblig)
@@ -304,12 +305,14 @@ def descargar_plantilla(fuente):
             (36, '89.90'),
             (38, '5.00'),
             (41, 'Polo Manga Corta Azul T S'),
+            (52, 'Entregadas'),
         ]
         for col, val in ejm:
             _ejm(ws, 2, col, val)
 
         for col_letter, w in [('B',22),('D',14),('E',18),('J',26),('L',14),
-                               (get_column_letter(36),16),(get_column_letter(38),16),(get_column_letter(41),34)]:
+                               (get_column_letter(36),16),(get_column_letter(38),16),
+                               (get_column_letter(41),34),(get_column_letter(52),18)]:
             ws.column_dimensions[col_letter].width = w
 
         filename = 'plantilla_falabella.xlsx'
@@ -429,8 +432,9 @@ def descargar_errores():
             'col_precio':  36,  # AJ
             'col_envio':   38,  # AL
             'col_cant':    None,
-            'col_error':   42,  # AP
-            'col_widths':  {2:18, 5:22, 10:28, 12:16, 36:16, 38:16, 41:34, 42:50},
+            'col_estado':  52,  # AZ
+            'col_error':   53,  # BA
+            'col_widths':  {2:18, 5:22, 10:28, 12:16, 36:16, 38:16, 41:34, 52:18, 53:50},
         },
         'meli': {
             'header_row': 1, 'data_start': 2,
@@ -444,6 +448,7 @@ def descargar_errores():
             'col_precio':  34,  # AH
             'col_envio':   22,  # V
             'col_cant':    35,  # AI
+            'col_estado':  None,
             'col_error':   51,  # AY
             'col_widths':  {1:22, 7:14, 22:16, 31:22, 34:16, 35:10, 43:34, 47:26, 50:14, 51:50},
         },
@@ -459,6 +464,7 @@ def descargar_errores():
             'col_precio':  13,  # M
             'col_envio':   24,  # X
             'col_cant':    11,  # K
+            'col_estado':  None,
             'col_error':   25,  # Y
             'col_widths':  {1:22, 3:14, 7:16, 8:28, 9:34, 10:22, 11:10, 13:16, 24:16, 25:50},
         },
@@ -491,6 +497,8 @@ def descargar_errores():
     }
     if layout['col_cant']:
         col_labels[layout['col_cant']] = 'Cantidad'
+    if layout.get('col_estado'):
+        col_labels[layout['col_estado']] = 'Estado'
 
     for col, label in col_labels.items():
         cell = ws.cell(row=HDR_ROW, column=col, value=label)
@@ -528,6 +536,8 @@ def descargar_errores():
         status       = orden.get('status', 'ERROR')
         ord_fill     = ERR_FILL if status == 'ERROR' else WARN_FILL
 
+        estado_raw   = orden.get('estado_raw', '')
+
         if not items:
             detalle = ' | '.join(errores_ord + advertencias) or '—'
             _celda(current_row, layout['col_orden'],  num_orden, ord_fill)
@@ -535,6 +545,7 @@ def descargar_errores():
             _celda(current_row, layout['col_nombre'], nombre,    ord_fill)
             _celda(current_row, layout['col_doc'],    num_doc,   ord_fill)
             _celda(current_row, layout['col_envio'],  costo_envio, ord_fill)
+            _celda(current_row, layout.get('col_estado'), estado_raw, ord_fill)
             _celda(current_row, layout['col_error'],  detalle,   ord_fill)
             ws.row_dimensions[current_row].height = 18
             current_row += 1

@@ -69,7 +69,13 @@
       <div class="small text-muted">Errores</div>
     </div>
   </div>
-  <div class="col-12 col-md-4">
+  <div class="col-6 col-md-2">
+    <div class="af-card p-3 text-center">
+      <div class="fs-4 fw-bold text-secondary" id="resCancelado">—</div>
+      <div class="small text-muted">Canceladas</div>
+    </div>
+  </div>
+  <div class="col-12 col-md-2">
     <div class="af-card p-3 text-center" style="border: 1px solid rgba(111,66,193,0.3); background: rgba(111,66,193,0.05);">
       <div class="fs-4 fw-bold" id="resSeleccionado" style="color:#6f42c1;">S/ 0.00</div>
       <div class="small text-muted"><span id="resSeleccionadoCount">0</span> seleccionadas — Total a procesar</div>
@@ -182,6 +188,7 @@
     document.getElementById('resOK').textContent = resumen.ok ?? '';
     document.getElementById('resWarning').textContent = resumen.warning ?? '';
     document.getElementById('resError').textContent = resumen.error ?? '';
+    document.getElementById('resCancelado').textContent = resumen.cancelado ?? 0;
 
     renderTabla(todasLasOrdenes);
     actualizarTotalSeleccionado();
@@ -196,16 +203,22 @@
     }
 
     tbody.innerHTML = ordenes.map((o, i) => {
-      const disabled = o.status === 'ERROR' || o.ya_existe ? 'disabled' : '';
-      const checked = o.status !== 'ERROR' && !o.ya_existe ? 'checked' : '';
-      const badgeClass = { OK: 'bg-success', WARNING: 'bg-warning text-dark', ERROR: 'bg-danger' }[o.status] || 'bg-secondary';
-      const tipoBadge = o.tipo_comprobante === 'FACTURA'
-        ? '<span class="badge bg-primary">Factura</span>'
-        : '<span class="badge bg-secondary">Boleta</span>';
+      const cancelado = o.status === 'CANCELADO';
+      const disabled = o.status === 'ERROR' || o.ya_existe || cancelado ? 'disabled' : '';
+      const checked = o.status !== 'ERROR' && !o.ya_existe && !cancelado ? 'checked' : '';
+      const badgeClass = { OK: 'bg-success', WARNING: 'bg-warning text-dark', ERROR: 'bg-danger', CANCELADO: 'bg-secondary' }[o.status] || 'bg-secondary';
+      const tipoBadge = cancelado
+        ? '<span class="badge bg-secondary">—</span>'
+        : o.tipo_comprobante === 'FACTURA'
+          ? '<span class="badge bg-primary">Factura</span>'
+          : '<span class="badge bg-secondary">Boleta</span>';
 
       const mensajes = [...(o.errores || []), ...(o.advertencias || [])].slice(0, 2).join(' / ');
+      const rowStyle = cancelado ? ' style="opacity:0.55; background:rgba(0,0,0,0.03);"' : '';
+      const estadoRawHtml = cancelado && o.estado_raw
+        ? `<div class="text-muted mt-1" style="font-size:.75rem;">${o.estado_raw}</div>` : '';
 
-      return `<tr data-orden="${o.numero_orden}" id="fila-${i}">
+      return `<tr data-orden="${o.numero_orden}" id="fila-${i}"${rowStyle}>
       <td><input type="checkbox" class="form-check-input chk-orden" value="${i}" ${checked} ${disabled} onchange="actualizarTotalSeleccionado()"></td>
       <td><span class="fw-semibold">${o.numero_orden}</span></td>
       <td>
@@ -213,17 +226,18 @@
         <div class="text-muted" style="font-size:.78rem;">${o.numero_documento || ''}</div>
       </td>
       <td>${tipoBadge}</td>
-      <td class="text-end fw-semibold">S/ ${parseFloat(o.total_estimado || 0).toFixed(2)}</td>
+      <td class="text-end fw-semibold">${cancelado ? '—' : 'S/ ' + parseFloat(o.total_estimado || 0).toFixed(2)}</td>
       <td>
         <span class="badge ${badgeClass}">${o.status}</span>
         ${o.ya_existe ? '<span class="badge bg-dark ms-1">Ya existe</span>' : ''}
+        ${estadoRawHtml}
         ${mensajes ? `<div class="text-muted mt-1" style="font-size:.75rem;">${mensajes}</div>` : ''}
       </td>
       <td>
-        <button class="btn btn-xs btn-outline-secondary py-0 px-2"
+        ${cancelado ? '' : `<button class="btn btn-xs btn-outline-secondary py-0 px-2"
                 onclick="verDetalle(${i})" style="font-size:.78rem;">
           <i class="bi bi-eye"></i> Ver
-        </button>
+        </button>`}
       </td>
     </tr>`;
     }).join('');
