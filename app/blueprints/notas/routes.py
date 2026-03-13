@@ -5,7 +5,12 @@ from flask import render_template, request, jsonify, abort, current_app
 from flask_login import login_required, current_user
 from app.extensions import db
 from app.models.comprobante import Comprobante, ComprobanteItem
-from app.services.utils import calcular_igv_item, calcular_totales_comprobante
+from app.services.utils import (
+    calcular_igv_item,
+    calcular_totales_comprobante,
+    validar_fecha_atraso,
+    validar_fecha_correlativo,
+)
 from app.services import mipse_service, file_service as file_svc
 from app.services.sunat_xml_service import MOTIVOS_NC, MOTIVOS_ND
 from app.decorators import requiere_permiso
@@ -53,6 +58,15 @@ def nc_lote():
 
             serie = cfg.get('SERIE_NC_FACTURA', 'FC01') if comp_ref.tipo_comprobante == 'FACTURA' \
                     else cfg.get('SERIE_NC_BOLETA', 'BC01')
+
+            tipo_nc = comp_ref.tipo_comprobante  # BOLETA o FACTURA
+            err = validar_fecha_atraso(tipo_nc, fecha_emision_nc)
+            if not err:
+                err = validar_fecha_correlativo(serie, fecha_emision_nc)
+            if err:
+                errores.append({'numero': comp_ref.numero_completo, 'error': err})
+                continue
+
             correlativo  = _siguiente_correlativo(serie)
             motivo_texto = MOTIVOS_NC[motivo_codigo]
 
@@ -178,6 +192,13 @@ def crear_nc():
         cfg = current_app.config
         serie = cfg.get('SERIE_NC_FACTURA', 'FC01') if comp_ref.tipo_comprobante == 'FACTURA' \
                 else cfg.get('SERIE_NC_BOLETA', 'BC01')
+
+        tipo_nc = comp_ref.tipo_comprobante  # BOLETA o FACTURA
+        err = validar_fecha_atraso(tipo_nc, fecha_emision_nc)
+        if not err:
+            err = validar_fecha_correlativo(serie, fecha_emision_nc)
+        if err:
+            return jsonify({'success': False, 'message': err}), 422
 
         correlativo  = _siguiente_correlativo(serie)
         motivo_texto = motivo_desc or MOTIVOS_NC.get(motivo_codigo, '')

@@ -12,7 +12,12 @@ from app.services.cliente_service import (
     buscar_cliente_local,
     guardar_cliente_desde_dict,
 )
-from app.services.utils import calcular_igv_item, calcular_totales_comprobante
+from app.services.utils import (
+    calcular_igv_item,
+    calcular_totales_comprobante,
+    validar_fecha_atraso,
+    validar_fecha_correlativo,
+)
 from app.services import mipse_service, file_service as file_svc
 from app.decorators import requiere_permiso
 from . import ventas_bp
@@ -77,6 +82,13 @@ def crear_venta():
                 fecha_emision = datetime.strptime(fecha_emision_str, '%Y-%m-%d')
             except ValueError:
                 pass
+
+        # ── Validaciones de fecha SUNAT ──
+        err = validar_fecha_atraso(tipo_comp, fecha_emision)
+        if not err:
+            err = validar_fecha_correlativo(serie, fecha_emision)
+        if err:
+            return jsonify({'success': False, 'message': err}), 422
 
         # ── Correlativo ──
         correlativo = _siguiente_correlativo(serie)

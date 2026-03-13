@@ -23,7 +23,12 @@ from app.extensions import db
 from app.models.cliente import Cliente
 from app.models.comprobante import Comprobante, ComprobanteItem
 from app.models.producto import Variacion, Producto
-from app.services.utils import calcular_igv_item, calcular_totales_comprobante
+from app.services.utils import (
+    calcular_igv_item,
+    calcular_totales_comprobante,
+    validar_fecha_atraso,
+    validar_fecha_correlativo,
+)
 from app.services import mipse_service, file_service as file_svc
 from app.services.cliente_service import buscar_o_crear_cliente, guardar_cliente_desde_dict
 
@@ -451,6 +456,13 @@ def _crear_comprobante(
             db.session.flush()
 
     tipo_doc_sunat = '01' if tipo_comprobante == 'FACTURA' else '03'
+
+    err = validar_fecha_atraso(tipo_comprobante, fecha_emision)
+    if not err:
+        err = validar_fecha_correlativo(serie, fecha_emision)
+    if err:
+        raise ValueError(err)
+
     correlativo = _siguiente_correlativo(serie)
     costo_envio = Decimal(str(orden.get('costo_envio', '0')))
 

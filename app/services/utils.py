@@ -167,6 +167,59 @@ def number_to_words_es(amount: Decimal) -> str:
     return f"{texto} CON {centavos:02d}/100 SOLES"
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Validaciones de fecha SUNAT
+# ─────────────────────────────────────────────────────────────────────────────
+
+from datetime import date, timedelta
+
+
+def validar_fecha_correlativo(serie: str, fecha_emision) -> str | None:
+    """
+    Regla SUNAT: el nuevo comprobante no puede tener fecha_emision anterior
+    al último comprobante emitido en la misma serie.
+
+    Retorna mensaje de error (str) si la fecha es inválida, None si es válida.
+    """
+    from app.extensions import db
+    from app.models.comprobante import Comprobante
+    ultima_fecha = (
+        db.session.query(db.func.max(Comprobante.fecha_emision))
+        .filter(Comprobante.serie == serie)
+        .scalar()
+    )
+    if ultima_fecha and fecha_emision.date() < ultima_fecha.date():
+        return (
+            f'La fecha {fecha_emision.strftime("%d/%m/%Y")} es anterior al '
+            f'último comprobante de la serie {serie} '
+            f'({ultima_fecha.strftime("%d/%m/%Y")}). '
+            f'Los correlativos deben emitirse en orden cronológico (norma SUNAT).'
+        )
+    return None
+
+
+def validar_fecha_atraso(tipo_comprobante: str, fecha_emision) -> str | None:
+    """
+    Regla SUNAT: máximo 7 días de atraso para boletas, 3 para facturas.
+    NCs, NDs y otros tipos no aplican esta regla.
+
+    Retorna mensaje de error (str) si la fecha es inválida, None si es válida.
+    """
+    _LIMITES = {'BOLETA': 7, 'FACTURA': 3}
+    limite = _LIMITES.get(tipo_comprobante)
+    if limite is None:
+        return None
+    hoy = date.today()
+    fecha_minima = hoy - timedelta(days=limite)
+    if fecha_emision.date() < fecha_minima:
+        return (
+            f'La fecha {fecha_emision.strftime("%d/%m/%Y")} supera el límite '
+            f'de {limite} días de atraso permitidos para {tipo_comprobante} '
+            f'(norma SUNAT). Fecha mínima permitida: {fecha_minima.strftime("%d/%m/%Y")}.'
+        )
+    return None
+
+
 def extraer_skus_base(sku_woo: str) -> list:
     """Extrae segmentos numéricos de 7 u 8 dígitos de un SKU compuesto.
 
