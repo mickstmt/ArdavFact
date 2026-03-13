@@ -25,15 +25,16 @@ function showToast(title, message, type = 'info', duration = 4500, url = null) {
 
   const icon = TOAST_ICONS[type] || 'bi-bell-fill';
 
+  const colorMap = { danger: '#dc3545', success: '#198754', warning: '#fd7e14', info: '#0dcaf0' };
   toast.innerHTML = `
-    <i class="bi ${icon}" style="color: var(--bs-${type === 'danger' ? 'danger' : type === 'success' ? 'success' : type === 'warning' ? 'warning' : 'info'}); flex-shrink:0; margin-top:1px;"></i>
+    <i class="bi ${icon}" style="color:${colorMap[type] || '#0dcaf0'}; font-size:1.35rem; flex-shrink:0; margin-top:1px;"></i>
     <div style="flex:1; min-width:0;">
       <div class="af-toast-title">${title}</div>
       ${message ? `<div class="af-toast-msg">${message}</div>` : ''}
-      ${url ? `<div class="af-toast-msg" style="opacity:0.7;font-size:0.75em;">Click para ver detalle</div>` : ''}
+      ${url ? `<div class="af-toast-msg" style="opacity:0.7;font-size:0.8em;margin-top:0.2rem;">Clic para ver detalle →</div>` : ''}
     </div>
     <button class="af-toast-close" onclick="event.stopPropagation();this.closest('.af-toast').remove()" aria-label="Cerrar">
-      <i class="bi bi-x"></i>
+      <i class="bi bi-x-lg"></i>
     </button>
   `;
 
