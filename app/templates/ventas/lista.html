@@ -307,17 +307,44 @@ async function reenviarSunat(compId) {
     background: 'var(--af-surface)', color: 'var(--af-text)',
   });
   if (!ok.isConfirmed) return;
+
+  Swal.fire({
+    title: 'Enviando a SUNAT…',
+    html: 'Por favor espere.',
+    allowOutsideClick: false, showConfirmButton: false,
+    background: 'var(--af-surface)', color: 'var(--af-text)',
+    didOpen: () => Swal.showLoading(),
+  });
   try {
     const res = await afFetch(`/comprobantes/${compId}/reenviar`, { method: 'POST' });
-    showToast(res.success ? 'Enviado' : 'Error', res.message, res.success ? 'success' : 'danger');
-    if (res.success) setTimeout(() => location.reload(), 1500);
-  } catch(e) { showToast('Error', e.message, 'danger'); }
+    await Swal.fire({
+      title: res.success ? 'Enviado' : 'Error',
+      text: res.message,
+      icon: res.success ? 'success' : 'error',
+      confirmButtonColor: '#0d6efd',
+      background: 'var(--af-surface)', color: 'var(--af-text)',
+    });
+    if (res.success) location.reload();
+  } catch(e) {
+    Swal.fire({ title: 'Error', text: e.message, icon: 'error',
+      background: 'var(--af-surface)', color: 'var(--af-text)' });
+  }
 }
 
 // ── Descarga masiva ──
 async function descargarLote(tipo) {
   const ids = [...document.querySelectorAll('.row-check:checked')].map(c => c.value);
   if (!ids.length) return;
+
+  const tipoLabel = { pdf: 'PDFs', xml: 'XMLs', cdr: 'CDRs' }[tipo] || tipo.toUpperCase();
+  Swal.fire({
+    title: `Preparando ${tipoLabel}…`,
+    html: `Generando el archivo ZIP con ${ids.length} comprobante(s), por favor espere.`,
+    allowOutsideClick: false, showConfirmButton: false,
+    background: 'var(--af-surface)', color: 'var(--af-text)',
+    didOpen: () => Swal.showLoading(),
+  });
+
   try {
     const res = await fetch('/comprobantes/descargar-lote', {
       method: 'POST',
@@ -326,37 +353,65 @@ async function descargarLote(tipo) {
     });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      showToast('Error', data.message || 'No se encontraron archivos.', 'danger');
+      Swal.fire({ title: 'Error', text: data.message || 'No se encontraron archivos.',
+        icon: 'error', background: 'var(--af-surface)', color: 'var(--af-text)' });
       return;
     }
     const blob = await res.blob();
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
+    Swal.close();
+    const url = URL.createObjectURL(blob);
+    const a   = document.createElement('a');
     a.href = url;
-    a.download = res.headers.get('Content-Disposition')?.match(/filename="?([^"]+)"?/)?.[1] || `comprobantes_${tipo}.zip`;
+    a.download = res.headers.get('Content-Disposition')?.match(/filename="?([^"]+)"?/)?.[1]
+                 || `comprobantes_${tipo}.zip`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-  } catch(e) { showToast('Error', e.message, 'danger'); }
+  } catch(e) {
+    Swal.fire({ title: 'Error', text: e.message, icon: 'error',
+      background: 'var(--af-surface)', color: 'var(--af-text)' });
+  }
 }
 
 // ── Envío lote ──
 async function enviarLote() {
   const ids = [...document.querySelectorAll('.row-check:checked')].map(c => c.value);
   if (!ids.length) return;
+
   const ok = await Swal.fire({
     title: `Enviar ${ids.length} comprobante(s) a SUNAT`,
     icon: 'question', showCancelButton: true,
     confirmButtonText: 'Enviar', confirmButtonColor: '#0d6efd',
+    cancelButtonText: 'Cancelar',
     background: 'var(--af-surface)', color: 'var(--af-text)',
   });
   if (!ok.isConfirmed) return;
+
+  Swal.fire({
+    title: 'Enviando a SUNAT…',
+    html: `Procesando <strong>${ids.length}</strong> comprobante(s), por favor espere.<br>
+           <small class="text-muted">Esto puede tomar varios segundos.</small>`,
+    allowOutsideClick: false, showConfirmButton: false,
+    background: 'var(--af-surface)', color: 'var(--af-text)',
+    didOpen: () => Swal.showLoading(),
+  });
+
   try {
     const res = await afFetch('/comprobantes/enviar-lote', { method: 'POST', body: { ids } });
-    showToast('Lote procesado', res.message, 'info');
-    setTimeout(() => location.reload(), 1500);
-  } catch(e) { showToast('Error', e.message, 'danger'); }
+    await Swal.fire({
+      title: 'Lote procesado',
+      text: res.message,
+      icon: res.success ? 'success' : 'warning',
+      confirmButtonText: 'Ver lista actualizada',
+      confirmButtonColor: '#0d6efd',
+      background: 'var(--af-surface)', color: 'var(--af-text)',
+    });
+    location.reload();
+  } catch(e) {
+    Swal.fire({ title: 'Error', text: e.message, icon: 'error',
+      background: 'var(--af-surface)', color: 'var(--af-text)' });
+  }
 }
 
 // ── NC en lote ──
