@@ -209,6 +209,7 @@ def _generar_credit_note(comprobante) -> etree.Element:
 
     for idx, item in enumerate(comprobante.items, start=1):
         _add_credit_note_line(root, item, idx)
+    _add_credit_note_line_envio(root, comprobante, len(comprobante.items) + 1)
 
     return root
 
@@ -513,6 +514,63 @@ def _add_credit_note_line(root: etree.Element, item, idx: int):
     _add_item_description(line, item)
     price = _cac(line, 'Price')
     _amt(price, 'PriceAmount', _d(item.precio_unitario_sin_igv))
+
+
+def _add_credit_note_line_envio(root: etree.Element, comprobante, idx: int):
+    """CreditNoteLine para el costo de envío en Notas de Crédito.
+
+    Espeja _add_invoice_line_envio — necesario para que la sumatoria de líneas
+    coincida con TaxTotal/TaxSubtotal/TaxableAmount (evita errores SUNAT 4299/4290).
+    """
+    envio = _d(comprobante.costo_envio)
+    if envio <= Decimal('0'):
+        return
+
+    envio_sin_igv = (envio / Decimal('1.18')).quantize(Decimal('0.01'), ROUND_HALF_UP)
+    envio_igv = (envio - envio_sin_igv).quantize(Decimal('0.01'), ROUND_HALF_UP)
+
+    line = _cac(root, 'CreditNoteLine')
+    _cbc(line, 'ID', str(idx))
+
+    qty_el = _cbc(line, 'CreditedQuantity', '1.00')
+    qty_el.set('unitCode', 'ZZ')
+    qty_el.set('unitCodeListAgencyName', 'United Nations Economic Commission for Europe')
+    qty_el.set('unitCodeListID', 'UN/ECE rec 20')
+
+    _amt(line, 'LineExtensionAmount', envio_sin_igv)
+
+    pr = _cac(line, 'PricingReference')
+    acp = _cac(pr, 'AlternativeConditionPrice')
+    _amt(acp, 'PriceAmount', envio)
+    ptc = _cbc(acp, 'PriceTypeCode', '01')
+    ptc.set('listAgencyName', 'PE:SUNAT')
+    ptc.set('listName', 'Tipo de Precio')
+    ptc.set('listURI', 'urn:pe:gob:sunat:cpe:see:gem:catalogos:catalogo16')
+
+    tt = _cac(line, 'TaxTotal')
+    _amt(tt, 'TaxAmount', envio_igv)
+    ts = _cac(tt, 'TaxSubtotal')
+    _amt(ts, 'TaxableAmount', envio_sin_igv)
+    _amt(ts, 'TaxAmount', envio_igv)
+    tc = _cac(ts, 'TaxCategory')
+    _cbc(tc, 'Percent', '18.00')
+    erc = _cbc(tc, 'TaxExemptionReasonCode', '10')
+    erc.set('listAgencyName', 'PE:SUNAT')
+    erc.set('listName', 'Afectacion del IGV')
+    erc.set('listURI', 'urn:pe:gob:sunat:cpe:see:gem:catalogos:catalogo07')
+    tscheme = _cac(tc, 'TaxScheme')
+    tid = _cbc(tscheme, 'ID', '1000')
+    tid.set('schemeAgencyName', 'PE:SUNAT')
+    tid.set('schemeID', 'UN/ECE 5153')
+    tid.set('schemeName', 'Codigo de tributos')
+    _cbc(tscheme, 'Name', 'IGV')
+    _cbc(tscheme, 'TaxTypeCode', 'VAT')
+
+    it = _cac(line, 'Item')
+    _cbc(it, 'Description', 'Costo de Envío')
+
+    price = _cac(line, 'Price')
+    _amt(price, 'PriceAmount', envio_sin_igv)
 
 
 def _add_debit_note_line(root: etree.Element, item, idx: int):
