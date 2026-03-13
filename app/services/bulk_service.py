@@ -256,7 +256,7 @@ def _match_sku(sku_raw: str) -> dict:
                     'msg': f'SKU {sku}: Múltiples productos encontrados para la base',
                     'variacion_id': None, 'desc_ref': None}
 
-    return {'status': 'error', 'msg': f'SKU "{sku}" no encontrado en la BD.', 'variacion_id': None, 'desc_ref': None}
+    return {'status': 'warning', 'msg': f'SKU "{sku}" no encontrado; se usará descripción del Excel.', 'variacion_id': None, 'desc_ref': None}
 
 
 def _analizar_item(item_raw: dict) -> dict:
