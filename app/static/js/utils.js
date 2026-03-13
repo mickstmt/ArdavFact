@@ -38,8 +38,12 @@ async function afFetch(url, options = {}) {
   }));
 
   if (!response.ok) {
-    const err = await response.json().catch(() => ({ message: 'Error desconocido' }));
-    throw new Error(err.message || `HTTP ${response.status}`);
+    const fallback = response.status === 400 ? 'La sesión ha expirado. Recarga la página.'
+                   : response.status === 401 ? 'Tu sesión ha expirado. Inicia sesión nuevamente.'
+                   : response.status === 403 ? 'Sin permisos para esta acción.'
+                   : 'Error desconocido';
+    const err = await response.json().catch(() => ({ message: fallback }));
+    throw new Error(err.message || fallback);
   }
 
   return response.json();

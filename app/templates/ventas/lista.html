@@ -352,8 +352,11 @@ async function descargarLote(tipo) {
       body: JSON.stringify({ ids, tipo }),
     });
     if (!res.ok) {
+      const fallback = res.status === 400 ? 'La sesión ha expirado. Recarga la página.'
+                     : res.status === 401 || res.status === 403 ? 'Sin permisos o sesión expirada.'
+                     : 'No se encontraron archivos para los comprobantes seleccionados.';
       const data = await res.json().catch(() => ({}));
-      Swal.fire({ title: 'Error', text: data.message || 'No se encontraron archivos.',
+      Swal.fire({ title: 'Error', text: data.message || fallback,
         icon: 'error', background: 'var(--af-surface)', color: 'var(--af-text)' });
       return;
     }
