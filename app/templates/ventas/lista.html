@@ -371,6 +371,10 @@ async function descargarLote(tipo) {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+    // Deseleccionar todo tras descarga exitosa
+    document.querySelectorAll('.row-check:checked').forEach(c => c.checked = false);
+    if (checkAll) checkAll.checked = false;
+    actualizarBulkBar();
   } catch(e) {
     Swal.fire({ title: 'Error', text: e.message, icon: 'error',
       background: 'var(--af-surface)', color: 'var(--af-text)' });
